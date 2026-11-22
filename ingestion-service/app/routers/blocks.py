@@ -40,6 +40,14 @@ def update_block_verification(
     block.verified_by = payload.verified_by
     block.verified_at = datetime.now(timezone.utc)
 
+    if payload.corrected_text is not None:
+        block.text = payload.corrected_text
+
+    if payload.corrected_netlist is not None:
+        curr_extra = dict(block.extra or {})
+        curr_extra["circuit_netlist"] = payload.corrected_netlist
+        block.extra = curr_extra
+
     # Automatically resolve or reinstate needs_review based on teacher verification decision
     if payload.verification_status in ("approved", "edited"):
         block.needs_review = False

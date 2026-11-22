@@ -36,6 +36,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
+@router.get(
+    "",
+    summary="List all uploaded documents with status and metadata",
+)
+def list_documents(db: Session = Depends(get_db)):
+    """Retrieve list of recently uploaded documents for the teacher review queue."""
+    docs = db.query(Document).order_by(Document.created_at.desc()).limit(50).all()
+    results = []
+    for d in docs:
+        flagged_count = 0
+        total_blocks = 0
+        for p in d.pages:
+            for b in p.blocks:
+                total_blocks += 1
+                if b.needs_review:
+                    flagged_count += 1
+        results.append({
+            "id": str(d.id),
+            "title": d.title,
+            "filename": d.original_filename,
+            "page_count": d.page_count,
+            "status": d.status,
+            "total_blocks": total_blocks,
+            "flagged_blocks": flagged_count,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+        })
+    return results
+
+
 @router.post(
     "",
     response_model=DocumentUploadResponse,
@@ -197,6 +226,7 @@ def _serialize_block(block: Block, storage, settings) -> BlockLayoutSchema:
         needs_review=block.needs_review,
         verification_status=block.verification_status,
         table=table_data,
+        extra=block.extra,
     )
 
 
@@ -280,3 +310,35 @@ def get_page_blocks(
 
     blocks = db.query(Block).filter(Block.page_id == page.id).order_by(Block.reading_order).all()
     return [_serialize_block(b, storage, settings) for b in blocks]
+
+
+@router.post(
+    "/{id}/publish",
+    summary="Approve and publish a document for student access",
+)
+def publish_document(
+    id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Marks document state as PUBLISHED, resolves pending flags, and unlocks for student view."""
+    document = db.query(Document).filter(Document.id == id).one_or_none()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with id '{id}' not found.",
+        )
+
+    document.status = "published"
+    for page in document.pages:
+        for block in page.blocks:
+            block.needs_review = False
+            if block.verification_status == "pending":
+                block.verification_status = "approved"
+
+    db.commit()
+    db.refresh(document)
+    return {
+        "status": "published",
+        "document_id": str(document.id),
+        "message": f"Document '{document.title}' is approved and published for blind student navigation.",
+    }

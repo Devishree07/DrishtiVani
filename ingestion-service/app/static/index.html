@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DrishtiVani — Educator Portal & Review Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-hover: #1f293d;
+      --border: #1f2937;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-glow: rgba(37, 99, 235, 0.25);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.15);
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.15);
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      background: rgba(17, 24, 39, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 1.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: white;
+    }
+
+    .brand-title { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-subtitle { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+
+    .nav-tabs {
+      display: flex;
+      background: #0d121f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 4px;
+    }
+
+    .nav-tab {
+      padding: 0.45rem 1rem;
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .nav-tab.active { background: var(--accent); color: white; }
+    .nav-tab:hover:not(.active) { color: white; background: rgba(255,255,255,0.05); }
+
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+    main { flex: 1; padding: 1.5rem 1.75rem; max-width: 1750px; margin: 0 auto; width: 100%; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    /* Upload Panel (Phase 1) */
+    .upload-container {
+      max-width: 900px;
+      margin: 2rem auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .dropzone {
+      border: 2px dashed #374151;
+      border-radius: var(--radius);
+      padding: 3.5rem 2rem;
+      text-align: center;
+      background: rgba(17, 24, 39, 0.4);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-glow); }
+    .dropzone-icon { font-size: 2.75rem; margin-bottom: 0.75rem; }
+    .dropzone-title { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .dropzone-sub { font-size: 0.85rem; color: var(--text-muted); }
+
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+    .form-label { font-size: 0.85rem; font-weight: 600; color: #d1d5db; }
+    .form-control {
+      background: #0d121f;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      color: white;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .form-control:focus { border-color: var(--accent); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s ease;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #059669; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: #d1d5db; }
+    .btn-outline:hover { background: rgba(255,255,255,0.06); color: white; }
+    .btn-sm { padding: 0.35rem 0.65rem; font-size: 0.78rem; }
+
+    /* Recent uploads list */
+    .table-container { overflow-x: auto; margin-top: 1.5rem; border-radius: var(--radius); border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th { background: #0f172a; padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: #9ca3af; border-bottom: 1px solid var(--border); }
+    td { padding: 0.85rem 1rem; border-bottom: 1px solid #1f2937; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.725rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-pending { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-verified { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Split-Pane Review Console (Phase 4) */
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.85rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .doc-selector-group { display: flex; align-items: center; gap: 0.75rem; }
+    .page-nav { display: flex; align-items: center; gap: 0.5rem; }
+
+    .split-pane-container {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 1.25rem;
+      height: calc(100vh - 180px);
+      min-height: 650px;
+    }
+
+    /* Left Pane: Scan Image with SVG Bounding Box Layer */
+    .pane-left {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pane-title-bar {
+      padding: 0.65rem 1rem;
+      background: #0f172a;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .scan-viewport {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+      background: #0b0f19;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 1rem;
+    }
+
+    .scan-wrapper {
+      position: relative;
+      display: inline-block;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    #pageScanImage {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #scanSvgOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+    }
+
+    .bbox-rect {
+      fill: transparent;
+      stroke-width: 2.5;
+      cursor: pointer;
+      transition: fill 0.15s ease, stroke-width 0.15s ease;
+    }
+    .bbox-rect.flagged {
+      stroke: var(--danger);
+      fill: rgba(239, 68, 68, 0.12);
+    }
+    .bbox-rect.verified {
+      stroke: var(--success);
+      fill: rgba(16, 185, 129, 0.08);
+    }
+    .bbox-rect:hover {
+      stroke-width: 4;
+      fill: rgba(255, 255, 255, 0.18);
+    }
+    .bbox-rect.highlighted {
+      stroke: #facc15 !important;
+      stroke-width: 4 !important;
+      fill: rgba(250, 204, 21, 0.25) !important;
+      filter: drop-shadow(0 0 6px #facc15);
+    }
+
+    /* Right Pane: Structured Output & Provenance */
+    .pane-right {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .block-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .block-card {
+      background: #0d121f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      position: relative;
+    }
+    .block-card:hover { border-color: #3b82f6; }
+    .block-card.flagged { border-left: 4px solid var(--danger); }
+    .block-card.verified { border-left: 4px solid var(--success); }
+    .block-card.highlighted {
+      border-color: #facc15;
+      background: rgba(250, 204, 21, 0.05);
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.2);
+    }
+
+    .block-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.65rem;
+    }
+
+    .block-type-tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #93c5fd;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .block-confidence {
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .block-body { font-size: 0.875rem; line-height: 1.5; color: #e5e7eb; }
+
+    .circuit-box {
+      background: #070a12;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin-top: 0.6rem;
+    }
+
+    .code-editor {
+      width: 100%;
+      background: #050810;
+      border: 1px solid #2d3748;
+      border-radius: 4px;
+      padding: 0.6rem;
+      color: #38bdf8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .node-tree {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+    }
+    .node-pill {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid #1f2937;
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.775rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .block-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* Student Portal Preview (Phase 5) */
+    .student-preview-container {
+      max-width: 950px;
+      margin: 1.5rem auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .shortcut-bar {
+      display: flex;
+      gap: 0.75rem;
+      background: #0d121f;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      font-size: 0.825rem;
+      color: #9ca3af;
+      align-items: center;
+    }
+    .kbd {
+      background: #1f2937;
+      color: white;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      border: 1px solid #374151;
+    }
+
+    .screen-reader-box {
+      background: #022c22;
+      border: 1px solid #059669;
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      color: #a7f3d0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #1f2937;
+      color: white;
+      padding: 0.85rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      font-size: 0.875rem;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.25s ease;
+      z-index: 9999;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">DV</div>
+      <div>
+        <div class="brand-title">DrishtiVani</div>
+        <div class="brand-subtitle">Educator Ingestion & Teacher Review Console</div>
+      </div>
+    </div>
+
+    <nav class="nav-tabs" role="tablist">
+      <button class="nav-tab active" data-tab="uploadTab">📤 1. Ingest Handout</button>
+      <button class="nav-tab" data-tab="reviewTab">🔍 4. Review Console</button>
+      <button class="nav-tab" data-tab="studentTab">🎓 5. Student View</button>
+    </nav>
+
+    <div class="header-actions">
+      <span class="status-pill" id="healthStatusPill">
+        <span class="status-dot"></span>
+        <span id="healthText">Pipeline Ready</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- Main Viewports -->
+  <main>
+
+    <!-- Tab 1: Handout Ingestion (Phase 1) -->
+    <div id="uploadTab" class="tab-content active">
+      <div class="upload-container">
+        <div class="card">
+          <h2 style="font-size: 1.35rem; margin-bottom: 0.5rem;">Upload Scanned Engineering Handout</h2>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem;">
+            Submit raw engineering study material (multi-page PDF). The system automatically decomposes pages, runs Surya-OCR layout analysis, and routes circuit diagrams to Member 2's CV/SPICE engine.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="courseSelect">Target Engineering Subject</label>
+            <select id="courseSelect" class="form-control">
+              <option value="Basic Electronics & Circuit Theory">Basic Electronics & Circuit Theory (EC201)</option>
+              <option value="Analog CMOS Circuits">Analog CMOS Circuits (EC302)</option>
+              <option value="Signals & Systems">Signals & Systems (EC204)</option>
+              <option value="Digital Logic & Processors">Digital Logic & Processors (CS205)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="handoutTitleInput">Handout Title (Optional)</label>
+            <input type="text" id="handoutTitleInput" class="form-control" placeholder="e.g. Lab 4 — Inverting Op-Amp & Active Filters">
+          </div>
+
+          <!-- Drag and Drop Zone -->
+          <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+            <div class="dropzone-icon">📄</div>
+            <div class="dropzone-title">Click to browse or drag & drop PDF handout</div>
+            <div class="dropzone-sub">Supported formats: Multi-page PDF (or high-resolution scan)</div>
+            <input type="file" id="fileInput" accept="application/pdf" style="display: none">
+          </div>
+
+          <div id="selectedFileInfo" style="margin-top: 1rem; font-size: 0.85rem; color: #93c5fd; display: none;"></div>
+
+          <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button class="btn btn-primary" id="btnUploadSubmit" onclick="uploadHandout()">
+              🚀 Upload & Process Handout
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Ingested Handouts -->
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="font-size: 1.1rem;">Recent Ingested Handouts Queue</h3>
+            <button class="btn btn-outline btn-sm" onclick="loadDocumentsList()">🔄 Refresh</button>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Title / File</th>
+                  <th>Pages</th>
+                  <th>Total Blocks</th>
+                  <th>Flagged (&lt; 0.88)</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="documentsTableBody">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading documents...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Split-Pane Review Console (Phase 4) -->
+    <div id="reviewTab" class="tab-content">
+      <div class="console-header">
+        <div class="doc-selector-group">
+          <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Handout:</label>
+          <select id="reviewDocSelect" class="form-control" style="width: 320px;" onchange="loadSelectedDocumentLayout()">
+            <option value="">Select an ingested handout...</option>
+          </select>
+
+          <div class="page-nav">
+            <button class="btn btn-outline btn-sm" onclick="changePage(-1)">◀ Prev</button>
+            <span id="pageIndicator" style="font-size: 0.825rem; font-weight: 600;">Page 1</span>
+            <button class="btn btn-outline btn-sm" onclick="changePage(1)">Next ▶</button>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <span id="reviewFlagSummary" style="font-size: 0.825rem; font-weight: 600;"></span>
+          <button class="btn btn-success" id="btnApprovePublish" onclick="publishCurrentDocument()">
+            ✅ Approve & Publish Handout
+          </button>
+        </div>
+      </div>
+
+      <!-- Split Pane -->
+      <div class="split-pane-container">
+
+        <!-- Left Pane: Scan Image with Color-Coded Bounding Boxes -->
+        <div class="pane-left">
+          <div class="pane-title-bar">
+            <span>📷 Original Scanned Handout (150 DPI)</span>
+            <span style="font-size: 0.75rem; color: #9ca3af;">
+              <span style="color: var(--danger);">■ Flagged (&lt; 0.88)</span> &nbsp;
+              <span style="color: var(--success);">■ Verified</span> &nbsp;
+              <span style="color: #facc15;">■ Active</span>
+            </span>
+          </div>
+
+          <div class="scan-viewport" id="scanViewport">
+            <div class="scan-wrapper" id="scanWrapper">
+              <img id="pageScanImage" alt="Scanned Page" src="" style="display:none;" onload="renderSvgOverlay()">
+              <svg id="scanSvgOverlay"></svg>
+            </div>
+            <div id="scanPlaceholder" style="margin: auto; color: var(--text-muted); font-size: 0.9rem;">
+              Select a handout to inspect original scan and bounding boxes.
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Pane: Structured Output & Synchronized Provenance Check -->
+        <div class="pane-right">
+          <div class="pane-title-bar">
+            <span>📝 Structured Parsed Output & Cross-Probing</span>
+            <span style="font-size: 0.75rem; color: #93c5fd;">Click item to highlight on scan</span>
+          </div>
+
+          <div class="block-list" id="blockList">
+            <div style="margin: auto; color: var(--text-muted); font-size: 0.9rem;">
+              Select a document from the dropdown above to load parsed equations, tables, and circuit netlists.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tab 3: Blind Student Study View (Phase 5) -->
+    <div id="studentTab" class="tab-content">
+      <div class="student-preview-container">
+        <div class="card">
+          <h2 style="font-size: 1.35rem; margin-bottom: 0.5rem;">🎓 Accessible Screen-Reader Study Simulation</h2>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem;">
+            Experience the document exactly as a visually impaired student navigating with zero-mouse assistive technology (NVDA, JAWS, or Orca).
+          </p>
+
+          <div class="shortcut-bar">
+            <span>Keyboard Shortcuts:</span>
+            <span class="kbd">H</span> Headings &nbsp;
+            <span class="kbd">T</span> Tables &nbsp;
+            <span class="kbd">E</span> Equations &nbsp;
+            <span class="kbd">D</span> Circuit Diagrams &nbsp;
+            <span class="kbd">↓</span> Traversal
+          </div>
+
+          <div style="margin-top: 1.25rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: #a7f3d0;">🔊 Screen-Reader Speech Simulation (ARIA Live Region)</h4>
+            <div class="screen-reader-box" id="studentSpeechBox">
+              "Press D to jump to the first circuit diagram. Press ArrowDown to traverse nodes."
+            </div>
+          </div>
+
+          <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+            <button class="btn btn-outline" onclick="downloadCurrentSpiceNetlist()">
+              ⚡ Download SPICE Netlist (.cir)
+            </button>
+            <button class="btn btn-outline" onclick="downloadBrailleFile()">
+              ⠃⠗⠋ Download Nemeth Braille (.brf)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast">Saved successfully!</div>
+
+  <script>
+    // App State
+    let currentDocumentId = null;
+    let currentLayout = null;
+    let currentPageIndex = 0;
+    let selectedBlockId = null;
+
+    // Initialize
+    window.addEventListener("DOMContentLoaded", () => {
+      setupTabs();
+      setupDropzone();
+      checkHealth();
+      loadDocumentsList();
+    });
+
+    // Tab Switching
+    function setupTabs() {
+      document.querySelectorAll(".nav-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+          document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
+          tab.classList.add("active");
+          const target = tab.getAttribute("data-tab");
+          document.getElementById(target).classList.add("active");
+
+          if (target === "reviewTab" && !currentLayout) {
+            loadDocumentsList();
+          }
+        });
+      });
+    }
+
+    // Health Check
+    async function checkHealth() {
+      try {
+        const res = await fetch("/health");
+        const data = await res.json();
+        const pill = document.getElementById("healthStatusPill");
+        const txt = document.getElementById("healthText");
+        if (data.status === "healthy") {
+          pill.style.background = "var(--success-bg)";
+          pill.style.color = "var(--success)";
+          txt.innerText = data.database.mode === "local_sqlite" ? "Local Mode (Ready)" : "Supabase Connected";
+        } else {
+          pill.style.background = "var(--danger-bg)";
+          pill.style.color = "var(--danger)";
+          txt.innerText = "DB Disconnected";
+        }
+      } catch (err) {
+        console.warn("Health check error:", err);
+      }
+    }
+
+    // Dropzone setup
+    function setupDropzone() {
+      const dropzone = document.getElementById("dropzone");
+      const fileInput = document.getElementById("fileInput");
+
+      ['dragenter', 'dragover'].forEach(name => {
+        dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+      });
+      ['dragleave', 'drop'].forEach(name => {
+        dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); });
+      });
+
+      dropzone.addEventListener("drop", (e) => {
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          fileInput.files = e.dataTransfer.files;
+          showSelectedFile(fileInput.files[0]);
+        }
+      });
+
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files[0]) showSelectedFile(fileInput.files[0]);
+      });
+    }
+
+    function showSelectedFile(file) {
+      const info = document.getElementById("selectedFileInfo");
+      info.style.display = "block";
+      info.innerText = `Selected File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    }
+
+    // Upload Handout (Phase 1)
+    async function uploadHandout() {
+      const fileInput = document.getElementById("fileInput");
+      const titleInput = document.getElementById("handoutTitleInput");
+      const btn = document.getElementById("btnUploadSubmit");
+
+      if (!fileInput.files || !fileInput.files[0]) {
+        showToast("Please choose a PDF file to upload.");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = "⏳ Ingesting & Segmenting...";
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+      if (titleInput.value.trim()) {
+        formData.append("title", titleInput.value.trim());
+      }
+
+      try {
+        const res = await fetch("/documents", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Upload failed");
+        }
+
+        const data = await res.json();
+        showToast("Handout uploaded! Processing pages in background...");
+        fileInput.value = "";
+        document.getElementById("selectedFileInfo").style.display = "none";
+        titleInput.value = "";
+
+        // Reload documents list and auto-open in review tab after short wait
+        setTimeout(() => {
+          loadDocumentsList();
+          openDocumentInReview(data.document_id);
+        }, 1500);
+
+      } catch (e) {
+        alert("Upload error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 Upload & Process Handout";
+      }
+    }
+
+    // Load Document List
+    async function loadDocumentsList() {
+      try {
+        const res = await fetch("/documents");
+        if (!res.ok) return;
+        const docs = await res.json();
+
+        const tbody = document.getElementById("documentsTableBody");
+        const select = document.getElementById("reviewDocSelect");
+
+        select.innerHTML = '<option value="">Select an ingested handout...</option>';
+
+        if (docs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No handouts uploaded yet. Upload a PDF above!</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = docs.map(d => {
+          const isFlagged = d.flagged_blocks > 0;
+          const statusBadge = d.status === "published"
+            ? '<span class="badge badge-verified">Published</span>'
+            : isFlagged
+              ? `<span class="badge badge-danger">Needs Review (${d.flagged_blocks})</span>`
+              : '<span class="badge badge-verified">Verified</span>';
+
+          // Add to select dropdown
+          const opt = document.createElement("option");
+          opt.value = d.id;
+          opt.innerText = `${d.title} (${d.page_count} pages) — ${d.status}`;
+          select.appendChild(opt);
+
+          return `
+            <tr>
+              <td><strong>${escapeHtml(d.title)}</strong><br><span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(d.filename)}</span></td>
+              <td>${d.page_count}</td>
+              <td>${d.total_blocks}</td>
+              <td>${d.flagged_blocks > 0 ? `<strong style="color: var(--danger);">${d.flagged_blocks}</strong>` : '0'}</td>
+              <td>${statusBadge}</td>
+              <td>
+                <button class="btn btn-outline btn-sm" onclick="openDocumentInReview('${d.id}')">Inspect Scan ▶</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+      } catch (err) {
+        console.error("Error loading documents:", err);
+      }
+    }
+
+    // Open Document in Review Console
+    function openDocumentInReview(docId) {
+      document.querySelector('[data-tab="reviewTab"]').click();
+      document.getElementById("reviewDocSelect").value = docId;
+      loadSelectedDocumentLayout();
+    }
+
+    // Load Document Layout (Phase 4)
+    async function loadSelectedDocumentLayout() {
+      const docId = document.getElementById("reviewDocSelect").value;
+      if (!docId) return;
+
+      currentDocumentId = docId;
+      currentPageIndex = 0;
+
+      try {
+        const res = await fetch(`/documents/${docId}/layout`);
+        if (!res.ok) throw new Error("Could not fetch document layout");
+        currentLayout = await res.json();
+
+        renderCurrentPage();
+      } catch (e) {
+        alert("Failed to load layout: " + e.message);
+      }
+    }
+
+    // Render Current Page
+    function renderCurrentPage() {
+      if (!currentLayout || !currentLayout.pages || currentLayout.pages.length === 0) {
+        return;
+      }
+
+      const page = currentLayout.pages[currentPageIndex];
+      document.getElementById("pageIndicator").innerText = `Page ${page.page_number} of ${currentLayout.pages.length}`;
+
+      const img = document.getElementById("pageScanImage");
+      const placeholder = document.getElementById("scanPlaceholder");
+
+      if (page.image_url) {
+        img.src = page.image_url;
+        img.style.display = "block";
+        placeholder.style.display = "none";
+      } else {
+        img.style.display = "none";
+        placeholder.style.display = "block";
+        placeholder.innerText = "No page scan image stored for this page.";
+      }
+
+      // Compute flagged blocks
+      let flaggedCount = 0;
+      currentLayout.pages.forEach(p => {
+        p.blocks.forEach(b => {
+          if (b.needs_review) flaggedCount++;
+        });
+      });
+
+      const flagSummary = document.getElementById("reviewFlagSummary");
+      if (flaggedCount > 0) {
+        flagSummary.innerHTML = `<span style="color: var(--danger);">🔴 ${flaggedCount} Item(s) Flagged for Review</span>`;
+      } else {
+        flagSummary.innerHTML = `<span style="color: var(--success);">🟢 All Items Verified (&ge; 0.88)</span>`;
+      }
+
+      renderBlockList(page.blocks);
+    }
+
+    // Render SVG Bounding Boxes Overlay
+    function renderSvgOverlay() {
+      if (!currentLayout || !currentLayout.pages) return;
+      const page = currentLayout.pages[currentPageIndex];
+      const img = document.getElementById("pageScanImage");
+      const svg = document.getElementById("scanSvgOverlay");
+
+      const width = img.naturalWidth || page.width_px || 800;
+      const height = img.naturalHeight || page.height_px || 1100;
+
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      svg.innerHTML = "";
+
+      page.blocks.forEach((block, idx) => {
+        const [x0, y0, x1, y1] = block.bbox;
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", x0);
+        rect.setAttribute("y", y0);
+        rect.setAttribute("width", Math.max(1, x1 - x0));
+        rect.setAttribute("height", Math.max(1, y1 - y0));
+        rect.setAttribute("data-id", block.id);
+        rect.setAttribute("id", `bbox-${block.id}`);
+
+        rect.classList.add("bbox-rect");
+        rect.classList.add(block.needs_review ? "flagged" : "verified");
+
+        rect.addEventListener("click", () => {
+          selectBlock(block.id, true);
+        });
+
+        // Hover tooltip
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = `#${block.reading_order} ${block.type} (${Math.round((block.ocr_confidence || block.layout_confidence) * 100)}%)`;
+        rect.appendChild(title);
+
+        svg.appendChild(rect);
+      });
+    }
+
+    // Render Right Pane Block List
+    function renderBlockList(blocks) {
+      const list = document.getElementById("blockList");
+      if (!blocks || blocks.length === 0) {
+        list.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">No blocks detected on this page.</div>';
+        return;
+      }
+
+      list.innerHTML = blocks.map(b => {
+        const isFlagged = b.needs_review;
+        const conf = Math.round((b.ocr_confidence || b.layout_confidence || 0) * 100);
+
+        let contentHtml = '';
+
+        // Circuit Diagram rendering
+        if (b.type === 'diagram') {
+          const extra = b.extra || {};
+          const netlist = extra.circuit_netlist || 'V1 n1 0 DC 10V\nR1 n1 n2 1k\nR2 n2 0 2k';
+          const summary = extra.circuit_summary || b.text || 'Circuit diagram';
+          const nodes = extra.circuit_nodes || [];
+
+          contentHtml = `
+            <div class="circuit-box">
+              <div style="font-weight: 600; color: #a5b4fc; font-size: 0.825rem; margin-bottom: 0.4rem;">
+                Macro Summary: "${escapeHtml(summary)}"
+              </div>
+              <label style="font-size: 0.75rem; color: #9ca3af; display: block; margin-bottom: 0.2rem;">SPICE Netlist (.cir):</label>
+              <textarea class="code-editor" id="netlist-${b.id}">${escapeHtml(netlist)}</textarea>
+
+              <div class="node-tree">
+                <span style="font-size: 0.75rem; color: #9ca3af;">Electrical Nodes:</span>
+                ${nodes.map(n => `<div class="node-pill"><strong>${n.node_id}:</strong> ${escapeHtml(n.description)}</div>`).join("")}
+              </div>
+            </div>
+          `;
+        } else if (b.type === 'table' && b.table) {
+          contentHtml = `
+            <div style="overflow-x: auto; margin-top: 0.5rem;">
+              <table style="font-size: 0.8rem;">
+                ${b.table.rows.map(r => `
+                  <tr>
+                    ${r.cells.map(c => c.is_header ? `<th style="padding: 0.4rem;">${escapeHtml(c.text)}</th>` : `<td style="padding: 0.4rem;">${escapeHtml(c.text)}</td>`).join("")}
+                  </tr>
+                `).join("")}
+              </table>
+            </div>
+          `;
+        } else {
+          // Regular text / heading / equation
+          contentHtml = `
+            <textarea class="form-control" id="text-${b.id}" style="width: 100%; min-height: 55px; margin-top: 0.4rem; font-size: 0.85rem;">${escapeHtml(b.text || '')}</textarea>
+          `;
+        }
+
+        return `
+          <div class="block-card ${isFlagged ? 'flagged' : 'verified'}" id="card-${b.id}" onclick="selectBlock('${b.id}', false)">
+            <div class="block-card-header">
+              <span class="block-type-tag">#${b.reading_order} ${b.type.replace('_', ' ')}</span>
+              <span class="block-confidence" style="color: ${isFlagged ? 'var(--danger)' : 'var(--success)'};">
+                ${conf}% ${isFlagged ? '(Flagged < 0.88)' : '(Verified)'}
+              </span>
+            </div>
+
+            <div class="block-body">
+              ${contentHtml}
+            </div>
+
+            <div class="block-actions">
+              <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); saveAndApproveBlock('${b.id}')">
+                💾 Save & Approve
+              </button>
+              <button class="btn btn-outline btn-sm" style="color: var(--danger);" onclick="event.stopPropagation(); rejectBlock('${b.id}')">
+                ❌ Flag Issue
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // Select Block & Synchronized Highlight
+    function selectBlock(blockId, scrollIntoView) {
+      selectedBlockId = blockId;
+
+      // Highlight SVG rect
+      document.querySelectorAll(".bbox-rect").forEach(r => r.classList.remove("highlighted"));
+      const targetRect = document.getElementById(`bbox-${blockId}`);
+      if (targetRect) targetRect.classList.add("highlighted");
+
+      // Highlight block card
+      document.querySelectorAll(".block-card").forEach(c => c.classList.remove("highlighted"));
+      const targetCard = document.getElementById(`card-${blockId}`);
+      if (targetCard) {
+        targetCard.classList.add("highlighted");
+        if (scrollIntoView) {
+          targetCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+
+      // Update student speech simulation
+      updateStudentSpeechSimulation(blockId);
+    }
+
+    // Save & Approve Block (Phase 4 API call)
+    async function saveAndApproveBlock(blockId) {
+      const textElem = document.getElementById(`text-${blockId}`);
+      const netlistElem = document.getElementById(`netlist-${blockId}`);
+
+      const payload = {
+        verification_status: "approved",
+        verified_by: "Prof. Reviewer",
+      };
+
+      if (textElem) payload.corrected_text = textElem.value;
+      if (netlistElem) payload.corrected_netlist = netlistElem.value;
+
+      try {
+        const res = await fetch(`/blocks/${blockId}/verification`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) throw new Error("Failed to verify block");
+        showToast("Block verified & approved!");
+
+        // Update local state and re-render
+        if (currentLayout) {
+          currentLayout.pages[currentPageIndex].blocks.forEach(b => {
+            if (b.id === blockId) {
+              b.needs_review = false;
+              b.verification_status = "approved";
+            }
+          });
+          renderCurrentPage();
+          renderSvgOverlay();
+        }
+
+      } catch (err) {
+        alert("Error saving block: " + err.message);
+      }
+    }
+
+    // Flag / Reject Block
+    async function rejectBlock(blockId) {
+      try {
+        const res = await fetch(`/blocks/${blockId}/verification`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            verification_status: "rejected",
+            verified_by: "Prof. Reviewer",
+          }),
+        });
+
+        if (!res.ok) throw new Error("Failed to flag block");
+        showToast("Block marked as needing teacher revision.");
+
+        if (currentLayout) {
+          currentLayout.pages[currentPageIndex].blocks.forEach(b => {
+            if (b.id === blockId) {
+              b.needs_review = true;
+              b.verification_status = "rejected";
+            }
+          });
+          renderCurrentPage();
+          renderSvgOverlay();
+        }
+      } catch (err) {
+        alert("Error flagging block: " + err.message);
+      }
+    }
+
+    // Approve & Publish Document
+    async function publishCurrentDocument() {
+      if (!currentDocumentId) return;
+
+      try {
+        const res = await fetch(`/documents/${currentDocumentId}/publish`, {
+          method: "POST",
+        });
+
+        if (!res.ok) throw new Error("Could not publish document");
+        const data = await res.json();
+        showToast(data.message || "Document approved & published!");
+
+        loadDocumentsList();
+        loadSelectedDocumentLayout();
+      } catch (err) {
+        alert("Error publishing: " + err.message);
+      }
+    }
+
+    // Page navigation
+    function changePage(delta) {
+      if (!currentLayout || !currentLayout.pages) return;
+      const newPage = currentPageIndex + delta;
+      if (newPage >= 0 && newPage < currentLayout.pages.length) {
+        currentPageIndex = newPage;
+        renderCurrentPage();
+      }
+    }
+
+    // Update Student Speech Simulation
+    function updateStudentSpeechSimulation(blockId) {
+      if (!currentLayout) return;
+      const page = currentLayout.pages[currentPageIndex];
+      const block = page.blocks.find(b => b.id === blockId);
+      if (!block) return;
+
+      const box = document.getElementById("studentSpeechBox");
+      if (block.type === 'diagram') {
+        const extra = block.extra || {};
+        box.innerHTML = `
+          <strong>[Diagram Detected]:</strong> "${escapeHtml(extra.circuit_summary || block.text || 'Circuit Diagram')}"<br>
+          <span style="color: #6ee7b7;">ARIA Node 1:</span> Node 1 connects positive terminal of V1 to pin 1 of R1.<br>
+          <span style="color: #6ee7b7;">ARIA Node 2:</span> Node 2 connects pin 2 of R1 to pin 1 of R2.<br>
+          <span style="color: #6ee7b7;">ARIA Node 0:</span> Node 0 (Ground) connects negative terminal of V1 to pin 2 of R2.
+        `;
+      } else {
+        box.innerHTML = `<strong>[${block.type.toUpperCase()}]:</strong> "${escapeHtml(block.text || 'Empty region')}"`;
+      }
+    }
+
+    // Downloads
+    function downloadCurrentSpiceNetlist() {
+      const netlist = "V1 n1 0 DC 10V\nR1 n1 n2 1k\nR2 n2 0 2k\n.end\n";
+      const blob = new Blob([netlist], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "circuit_diagram.cir";
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Downloaded SPICE netlist (.cir)");
+    }
+
+    function downloadBrailleFile() {
+      const brf = ",drishtivani ,accessible ,notes\n,,lab #d --- ,circuit ,theory\n";
+      const blob = new Blob([brf], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "handout_nemeth.brf";
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Downloaded Nemeth Braille (.brf)");
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 3500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

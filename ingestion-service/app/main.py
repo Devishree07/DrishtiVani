@@ -9,6 +9,9 @@ from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from pathlib import Path
+from fastapi import FastAPI, Response, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -100,6 +103,20 @@ app.mount("/local_storage", StaticFiles(directory=str(_local_dir)), name="local_
 # Register routers
 app.include_router(documents_router)
 app.include_router(blocks_router)
+
+_static_dir = Path(__file__).resolve().parent / "static"
+_static_dir.mkdir(parents=True, exist_ok=True)
+_index_html_path = _static_dir / "index.html"
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/review", response_class=HTMLResponse, include_in_schema=False)
+def serve_review_console():
+    """Serve the Teacher Ingestion and Review Console Web UI."""
+    if _index_html_path.exists():
+        return HTMLResponse(_index_html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h2>DrishtiVani Ingestion Service</h2><p>Visit <a href='/docs'>/docs</a></p>")
 
 
 @app.get(

@@ -68,6 +68,7 @@ class BlockLayoutSchema(BaseModel):
     needs_review: bool
     verification_status: VerificationStatusLiteral = "pending"
     table: Optional[TableGridSchema] = None
+    extra: Optional[dict] = None
 
 
 class PageLayoutSchema(BaseModel):
@@ -111,6 +112,8 @@ class VerificationUpdateRequest(BaseModel):
     """Payload for PATCH /blocks/{id}/verification."""
     verification_status: VerificationStatusLiteral
     verified_by: Optional[str] = None
+    corrected_text: Optional[str] = None
+    corrected_netlist: Optional[str] = None
 
 
 class BlockVerificationResponse(BaseModel):
