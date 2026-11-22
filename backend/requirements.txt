@@ -1,0 +1,15 @@
+# Math OCR & Formula Parsing
+pix2tex[gui]
+latex2mathml
+
+# Python Bindings for Liblouis Braille Translator
+louis
+
+# Image & HTML Utils
+Pillow
+beautifulsoup4
+
+# Backend Framework
+fastapi
+uvicorn
+pydantic
