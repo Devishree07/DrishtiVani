@@ -117,17 +117,26 @@ class Settings(BaseSettings):
         default=False,
         description="Skip live external connectivity checks on startup (useful for unit testing / CI)",
     )
+    USE_LOCAL_STORAGE: bool = Field(
+        default=False,
+        description="Enable local SQLite database and local filesystem storage for offline testing",
+    )
+    LOCAL_STORAGE_DIR: str = Field(
+        default="./local_storage",
+        description="Local directory for storing handouts, pages, and crops when in local mode",
+    )
 
     def get_sqlalchemy_database_url(self) -> str:
         """Return the database URL formatted for SQLAlchemy with the psycopg (v3) driver.
 
-        Supabase connection strings usually start with `postgresql://` or `postgres://`.
-        SQLAlchemy requires `postgresql+psycopg://` to use the psycopg v3 driver.
+        Supports local SQLite mode when DATABASE_URL is empty or sqlite, or when USE_LOCAL_STORAGE=True.
         """
-        url = self.DATABASE_URL.strip()
+        url = self.DATABASE_URL.strip() if self.DATABASE_URL else ""
         if not url:
-            return ""
+            return "sqlite:///./drishtivani_local.db"
 
+        if url.startswith("sqlite"):
+            return url
         if url.startswith("postgres://"):
             return "postgresql+psycopg://" + url[len("postgres://"):]
         if url.startswith("postgresql://"):

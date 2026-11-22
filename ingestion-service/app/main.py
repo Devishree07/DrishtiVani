@@ -8,6 +8,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
 from app.config import get_settings
 from app.db.session import check_db_connectivity
 from app.routers import blocks_router, documents_router
@@ -89,6 +92,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount local storage static directory if configured/existing
+_local_dir = Path(get_settings().LOCAL_STORAGE_DIR).resolve()
+_local_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/local_storage", StaticFiles(directory=str(_local_dir)), name="local_storage")
+
 # Register routers
 app.include_router(documents_router)
 app.include_router(blocks_router)
@@ -110,12 +118,19 @@ def health_check(response: Response):
     settings = get_settings()
     storage = get_storage_service()
 
-    db_status = {"status": "connected"}
-    storage_status = {"status": "connected", "buckets": [
-        settings.SUPABASE_BUCKET_HANDOUTS,
-        settings.SUPABASE_BUCKET_PAGES,
-        settings.SUPABASE_BUCKET_CROPS,
-    ]}
+    db_url = settings.get_sqlalchemy_database_url()
+    is_local = "sqlite" in db_url
+
+    db_status = {"status": "connected", "mode": "local_sqlite" if is_local else "supabase_postgres"}
+    storage_status = {
+        "status": "connected",
+        "mode": "local_filesystem" if storage._use_local else "supabase_storage",
+        "buckets": [
+            settings.SUPABASE_BUCKET_HANDOUTS,
+            settings.SUPABASE_BUCKET_PAGES,
+            settings.SUPABASE_BUCKET_CROPS,
+        ],
+    }
 
     is_healthy = True
 
@@ -136,13 +151,13 @@ def health_check(response: Response):
             is_healthy = False
             storage_status = {
                 "status": "unreachable",
-                "error": "Supabase Storage did not respond to bucket listing.",
+                "error": "Storage did not respond to bucket listing.",
             }
     except Exception as exc:
         is_healthy = False
         storage_status = {
             "status": "unreachable",
-            "error": "Supabase Storage reachability check failed.",
+            "error": "Storage reachability check failed.",
             "details": str(exc),
         }
 

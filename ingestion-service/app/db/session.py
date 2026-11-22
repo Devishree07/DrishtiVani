@@ -41,16 +41,31 @@ def get_db_engine():
     if "psycopg" in db_url:
         # Crucial for Supabase PgBouncer pooler (transaction mode): disable prepared statements
         connect_args["prepare_threshold"] = None
-
-    _engine = create_engine(
-        db_url,
-        pool_size=settings.DB_POOL_SIZE,
-        max_overflow=settings.DB_MAX_OVERFLOW,
-        pool_pre_ping=settings.DB_POOL_PRE_PING,
-        pool_recycle=settings.DB_POOL_RECYCLE,
-        connect_args=connect_args,
-        echo=False,
-    )
+        _engine = create_engine(
+            db_url,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_pre_ping=settings.DB_POOL_PRE_PING,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+            connect_args=connect_args,
+            echo=False,
+        )
+    elif "sqlite" in db_url:
+        connect_args["check_same_thread"] = False
+        _engine = create_engine(
+            db_url,
+            connect_args=connect_args,
+            echo=False,
+        )
+        from app.db.models import Base
+        Base.metadata.create_all(_engine)
+        logger.info("Local SQLite database engine initialized and tables created.")
+    else:
+        _engine = create_engine(
+            db_url,
+            connect_args=connect_args,
+            echo=False,
+        )
     return _engine
 
 

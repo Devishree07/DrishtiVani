@@ -177,9 +177,57 @@ class IngestionPipeline:
                                         content=crop_bytes,
                                         content_type="image/png",
                                     )
+
+                                    # Stage 2: Hand off Circuit Diagrams to Member 2 Diagram Engine
+                                    if b_type == BlockType.DIAGRAM.value:
+                                        try:
+                                            import sys
+                                            from pathlib import Path
+                                            root_dir = Path(__file__).resolve().parent.parent.parent.parent
+                                            if str(root_dir) not in sys.path:
+                                                sys.path.insert(0, str(root_dir))
+
+                                            import cv2
+                                            import numpy as np
+                                            from diagram_engine.detector import ComponentDetector
+                                            from diagram_engine.wire_tracer import WireTracer
+                                            from diagram_engine.graph_netlist import CircuitGraphNetlist
+
+                                            cv_crop = cv2.cvtColor(np.array(crop_img), cv2.COLOR_RGB2BGR)
+                                            detector = ComponentDetector()
+                                            tracer = WireTracer(inward_mask_margin=0)
+                                            graph_engine = CircuitGraphNetlist()
+
+                                            comps = detector.detect(cv_crop)
+                                            m_bin, r_bin = tracer.preprocess_and_mask(cv_crop, comps)
+                                            skel = tracer.skeletonize(m_bin)
+                                            juncs = tracer.classify_junctions(skel, r_bin)
+                                            segs = tracer.trace_wire_paths(skel, juncs)
+                                            diag_result = graph_engine.process(comps, juncs, segs, skel)
+
+                                            extracted_text = diag_result.summary
+                                            extra_data["circuit_netlist"] = diag_result.spice_netlist
+                                            extra_data["circuit_summary"] = diag_result.summary
+                                            extra_data["diagram_confidence"] = diag_result.confidence_score
+                                            extra_data["circuit_nodes"] = [
+                                                {
+                                                    "node_id": n.node_id,
+                                                    "description": n.description,
+                                                    "connected_components": [
+                                                        {"component_id": c.component_id, "class": c.class_name, "terminal": c.terminal}
+                                                        for c in n.connected_components
+                                                    ],
+                                                }
+                                                for n in diag_result.nodes
+                                            ]
+                                            if diag_result.needs_teacher_review:
+                                                blk.needs_review = True
+                                        except Exception as diag_err:
+                                            logger.warning("Diagram engine processing failed on block %s: %s", block_id, diag_err)
+
                                 except Exception as crop_err:
                                     logger.warning("Failed to store crop for block %s: %s", block_id, crop_err)
-                                # Equations & diagrams deliberately have extracted_text = None
+                                # Equations deliberately have extracted_text = None until Member 3 parses them
 
                             # Handling tabular data
                             elif b_type == BlockType.TABLE.value:
@@ -206,11 +254,12 @@ class IngestionPipeline:
                                     extracted_text = ""
                                     ocr_confidence = 0.50
 
-                            # Determine teacher review flag
+                            # Determine teacher review flag (Stage 3 Gate: < 0.88 Threshold)
                             needs_review = (
                                 blk.needs_review
                                 or (blk.layout_confidence < threshold)
                                 or (ocr_confidence is not None and ocr_confidence < threshold)
+                                or (extra_data.get("diagram_confidence") is not None and extra_data["diagram_confidence"] < 0.88)
                             )
 
                             block_record = Block(

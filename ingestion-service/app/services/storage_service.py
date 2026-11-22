@@ -6,6 +6,7 @@ and performs connectivity checks. No other module should directly import the Sup
 """
 
 import logging
+from pathlib import Path
 from typing import List, Optional
 from supabase import Client, create_client
 from app.config import get_settings
@@ -14,30 +15,37 @@ logger = logging.getLogger(__name__)
 
 
 class StorageService:
-    """Service wrapping Supabase Storage operations."""
+    """Service wrapping Supabase Storage operations with local filesystem fallback."""
 
     def __init__(self, client: Optional[Client] = None) -> None:
-        """Initialize the Supabase client using credentials from configuration."""
+        """Initialize the Supabase client or local storage directory."""
         self._settings = get_settings()
+        self._local_dir = Path(self._settings.LOCAL_STORAGE_DIR).resolve()
+
         if client is not None:
             self._client = client
+            self._use_local = False
+            logger.info("StorageService initialized with provided client.")
+        elif self._settings.USE_LOCAL_STORAGE:
+            self._use_local = True
+            self._client = None
+            logger.info("StorageService running in LOCAL mode at: %s", self._local_dir)
         elif self._settings.SUPABASE_URL and self._settings.SUPABASE_SERVICE_ROLE_KEY:
             self._client = create_client(
                 self._settings.SUPABASE_URL,
                 self._settings.SUPABASE_SERVICE_ROLE_KEY,
             )
+            self._use_local = False
             logger.info("Supabase Storage client initialized.")
         else:
+            self._use_local = True
             self._client = None
-            logger.warning(
-                "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not configured. "
-                "Supabase Storage operations will fail until valid credentials are provided."
-            )
+            logger.warning("Supabase credentials missing, falling back to LOCAL mode.")
 
     @property
     def client(self) -> Client:
         """Return the active Supabase client or raise if uninitialized."""
-        if self._client is None:
+        if self._client is None and not self._use_local:
             raise RuntimeError(
                 "Supabase client is not configured. "
                 "Please configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env file."
@@ -60,6 +68,11 @@ class StorageService:
             self._settings.SUPABASE_BUCKET_PAGES,
             self._settings.SUPABASE_BUCKET_CROPS,
         ]
+
+        if self._use_local:
+            for bucket_name in required_buckets:
+                (self._local_dir / bucket_name).mkdir(parents=True, exist_ok=True)
+            return required_buckets
 
         try:
             existing = self.client.storage.list_buckets()
@@ -97,19 +110,14 @@ class StorageService:
         content: bytes,
         content_type: str = "application/octet-stream",
     ) -> str:
-        """Upload raw bytes to a target bucket and storage path.
+        """Upload raw bytes to a target bucket and storage path."""
+        if self._use_local:
+            file_path = self._local_dir / bucket / path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(content)
+            logger.debug("Local upload %d bytes to '%s/%s'", len(content), bucket, path)
+            return path
 
-        Avoids storing duplicate file copies and overwrites if upsert is specified.
-
-        Args:
-            bucket: Name of the Supabase bucket.
-            path: Relative storage path inside the bucket (e.g. 'doc-id/page_1.png').
-            content: Raw file bytes.
-            content_type: MIME type of the file.
-
-        Returns:
-            str: The storage path inside the bucket.
-        """
         try:
             self.client.storage.from_(bucket).upload(
                 path=path,
@@ -128,18 +136,12 @@ class StorageService:
         path: Optional[str],
         expires_in: Optional[int] = None,
     ) -> Optional[str]:
-        """Generate a time-limited signed URL for a file stored in a private bucket.
-
-        Args:
-            bucket: Name of the Supabase bucket.
-            path: Storage path of the file in the bucket.
-            expires_in: Expiration time in seconds (defaults to SIGNED_URL_EXPIRATION_SECONDS).
-
-        Returns:
-            Optional[str]: Time-limited signed URL, or None if path is None/empty.
-        """
+        """Generate a time-limited signed URL for a file stored in a private bucket."""
         if not path:
             return None
+
+        if self._use_local:
+            return f"/local_storage/{bucket}/{path}"
 
         ttl = expires_in if expires_in is not None else self._settings.SIGNED_URL_EXPIRATION_SECONDS
         try:
@@ -152,15 +154,13 @@ class StorageService:
             return None
 
     def download_file(self, bucket: str, path: str) -> bytes:
-        """Download raw bytes of a file from Supabase Storage.
+        """Download raw bytes of a file from Storage."""
+        if self._use_local:
+            target = self._local_dir / bucket / path
+            if not target.exists():
+                raise FileNotFoundError(f"Local storage file not found: {target}")
+            return target.read_bytes()
 
-        Args:
-            bucket: Name of the Supabase bucket.
-            path: Relative storage path.
-
-        Returns:
-            bytes: The downloaded file contents.
-        """
         try:
             return self.client.storage.from_(bucket).download(path)
         except Exception as e:
@@ -168,12 +168,13 @@ class StorageService:
             raise
 
     def delete_file(self, bucket: str, path: str) -> None:
-        """Delete a file from Supabase Storage.
+        """Delete a file from Storage."""
+        if self._use_local:
+            target = self._local_dir / bucket / path
+            if target.exists():
+                target.unlink()
+            return
 
-        Args:
-            bucket: Name of the Supabase bucket.
-            path: Storage path to remove.
-        """
         try:
             self.client.storage.from_(bucket).remove([path])
             logger.info("Deleted file '%s/%s'", bucket, path)
@@ -182,11 +183,11 @@ class StorageService:
             raise
 
     def check_storage_connectivity(self) -> bool:
-        """Check if Supabase Storage is reachable by querying the bucket list.
+        """Check if Storage is reachable."""
+        if self._use_local:
+            self._local_dir.mkdir(parents=True, exist_ok=True)
+            return True
 
-        Returns:
-            bool: True if storage is reachable, False otherwise.
-        """
         try:
             self.client.storage.list_buckets()
             return True

@@ -163,10 +163,14 @@ htmlcov/
 *.pt
 runs/
 
-# DrishtiVani Generated Test Outputs
+# DrishtiVani Generated Test Outputs & Local Storage
 output_annotated*.png
 output_netlist.cir
 output_node_tree.json
+*.db
+local_storage/
+temp_crops/
+output/
 
 # IDE & Editor Settings
 .vscode/
