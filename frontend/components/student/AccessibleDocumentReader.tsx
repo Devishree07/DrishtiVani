@@ -225,13 +225,22 @@ export default function AccessibleDocumentReader({
             Download .BRF
           </button>
           <span className="rounded-full bg-[#fffcf6] px-3 py-1 font-bold">
-            Block {focusedIndex + 1} of {orderedBlocks.length}
+            {orderedBlocks.length === 0
+              ? "0 blocks"
+              : `Block ${focusedIndex + 1} of ${orderedBlocks.length}`}
           </span>
         </div>
       </section>
 
       {/* Document Content Blocks */}
-      <div className="space-y-4">
+      {orderedBlocks.length === 0 ? (
+        <div className="paper-card p-8 text-center text-sm font-semibold text-[#3b362f]">
+          No extracted blocks are available for this document yet. If it was
+          just uploaded or interrupted during processing, wait for parsing to
+          finish in the Teacher Dashboard or select another published document.
+        </div>
+      ) : (
+        <div className="space-y-4">
         {orderedBlocks.map((block, index) => {
           const isFocused = index === focusedIndex;
           const isSpeaking = speakingId === block.id;
@@ -409,7 +418,8 @@ export default function AccessibleDocumentReader({
             </article>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
