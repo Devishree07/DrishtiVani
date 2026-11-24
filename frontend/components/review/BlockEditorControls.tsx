@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { analyzeDiagramCrop, transcribeMathCrop } from "@/lib/api-client";
 import { CONFIDENCE_REVIEW_THRESHOLD } from "@/lib/mock-data";
 import type {
   BlockVerificationUpdate,
@@ -21,8 +22,10 @@ export default function BlockEditorControls({
 }: BlockEditorControlsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftContent, setDraftContent] = useState("");
+  const [draftNetlist, setDraftNetlist] = useState("");
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (!block) {
@@ -40,6 +43,7 @@ export default function BlockEditorControls({
   function startEditing() {
     if (!block) return;
     setDraftContent(block.content);
+    setDraftNetlist(block.diagram?.spiceNetlist ?? "");
     setDraftNote(block.reviewerNote ?? "");
     setSaveError(null);
     setIsEditing(true);
@@ -58,6 +62,46 @@ export default function BlockEditorControls({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRunDiagramEngine() {
+    if (!block?.cropUrl || enriching) return;
+    setEnriching(true);
+    setSaveError(null);
+    try {
+      const res = await analyzeDiagramCrop(block.cropUrl);
+      setDraftContent(res.summary);
+      setDraftNetlist(res.spiceNetlist);
+      setIsEditing(true);
+    } catch (err) {
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : "Diagram Engine (port 8001) unavailable.",
+      );
+    } finally {
+      setEnriching(false);
+    }
+  }
+
+  async function handleRunMathOcr() {
+    if (!block?.cropUrl || enriching) return;
+    setEnriching(true);
+    setSaveError(null);
+    try {
+      const res = await transcribeMathCrop(block.cropUrl);
+      setDraftContent(res.latex);
+      setDraftNote(`Nemeth: ${res.nemeth}`);
+      setIsEditing(true);
+    } catch (err) {
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : "Transcription Engine (port 8002) unavailable.",
+      );
+    } finally {
+      setEnriching(false);
     }
   }
 
@@ -118,6 +162,18 @@ export default function BlockEditorControls({
               className="paper-input mt-1.5 w-full p-3 text-sm"
             />
           </label>
+          {block.type === "diagram" && (
+            <label className="block text-xs font-bold uppercase tracking-wide text-[#3b362f]">
+              SPICE Netlist (.cir)
+              <textarea
+                rows={4}
+                value={draftNetlist}
+                onChange={(e) => setDraftNetlist(e.target.value)}
+                placeholder="* Optional SPICE netlist..."
+                className="paper-input mt-1.5 w-full p-3 font-mono text-xs"
+              />
+            </label>
+          )}
           <label className="block text-xs font-bold uppercase tracking-wide text-[#3b362f]">
             Reviewer note (optional)
             <input
@@ -136,6 +192,10 @@ export default function BlockEditorControls({
                 handleAction({
                   verificationStatus: "edited",
                   content: draftContent,
+                  correctedNetlist:
+                    block.type === "diagram" && draftNetlist.trim()
+                      ? draftNetlist
+                      : undefined,
                   reviewerNote: draftNote,
                 })
               }
@@ -209,6 +269,26 @@ export default function BlockEditorControls({
             >
               Reject
             </button>
+            {block.type === "diagram" && block.cropUrl && (
+              <button
+                type="button"
+                disabled={enriching}
+                onClick={() => void handleRunDiagramEngine()}
+                className="sketch-button-secondary px-3.5 py-2 text-xs"
+              >
+                {enriching ? "Analyzing..." : "Run Diagram Engine"}
+              </button>
+            )}
+            {block.type === "equation" && block.cropUrl && (
+              <button
+                type="button"
+                disabled={enriching}
+                onClick={() => void handleRunMathOcr()}
+                className="sketch-button-secondary px-3.5 py-2 text-xs"
+              >
+                {enriching ? "Transcribing..." : "Run Math OCR"}
+              </button>
+            )}
           </div>
         </div>
       )}

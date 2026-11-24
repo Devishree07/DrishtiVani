@@ -50,6 +50,8 @@ export interface DiagramContent {
 export interface MathContent {
   latex: string;
   spokenText: string;
+  mathml?: string;
+  nemeth?: string;
 }
 
 export interface ExtractedBlock {
@@ -102,6 +104,7 @@ export interface DocumentRecord {
 export interface BlockVerificationUpdate {
   verificationStatus: VerificationStatus;
   content?: string;
+  correctedNetlist?: string;
   reviewerNote?: string;
   verifiedBy?: string;
 }

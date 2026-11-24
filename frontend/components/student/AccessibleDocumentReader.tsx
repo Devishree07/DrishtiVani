@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { buildBrfFallbackContent } from "@/lib/api-client";
 import type { DocumentRecord, ExtractedBlock } from "@/types/document";
 
 interface AccessibleDocumentReaderProps {
@@ -106,6 +107,36 @@ export default function AccessibleDocumentReader({
         );
         if (firstHeading !== -1) focusBlockAt(firstHeading);
       }
+    } else if (e.key.toLowerCase() === "e") {
+      e.preventDefault();
+      const nextEq = orderedBlocks.findIndex(
+        (b, idx) => idx > focusedIndex && b.type === "equation",
+      );
+      if (nextEq !== -1) {
+        focusBlockAt(nextEq);
+      } else {
+        const firstEq = orderedBlocks.findIndex((b) => b.type === "equation");
+        if (firstEq !== -1) {
+          focusBlockAt(firstEq);
+        } else {
+          setLiveAnnouncement("No equation blocks in this document.");
+        }
+      }
+    } else if (e.key.toLowerCase() === "d") {
+      e.preventDefault();
+      const nextDiag = orderedBlocks.findIndex(
+        (b, idx) => idx > focusedIndex && b.type === "diagram",
+      );
+      if (nextDiag !== -1) {
+        focusBlockAt(nextDiag);
+      } else {
+        const firstDiag = orderedBlocks.findIndex((b) => b.type === "diagram");
+        if (firstDiag !== -1) {
+          focusBlockAt(firstDiag);
+        } else {
+          setLiveAnnouncement("No diagram blocks in this document.");
+        }
+      }
     } else if (e.key.toLowerCase() === "r") {
       e.preventDefault();
       const current = orderedBlocks[focusedIndex];
@@ -148,7 +179,19 @@ export default function AccessibleDocumentReader({
             <kbd className="rounded border border-[#211f1b] bg-[#fffcf6] px-1.5 py-0.5 font-mono">
               H
             </kbd>{" "}
-            Next heading
+            Heading
+          </span>
+          <span>
+            <kbd className="rounded border border-[#211f1b] bg-[#fffcf6] px-1.5 py-0.5 font-mono">
+              E
+            </kbd>{" "}
+            Equation
+          </span>
+          <span>
+            <kbd className="rounded border border-[#211f1b] bg-[#fffcf6] px-1.5 py-0.5 font-mono">
+              D
+            </kbd>{" "}
+            Diagram
           </span>
           <span>
             <kbd className="rounded border border-[#211f1b] bg-[#fffcf6] px-1.5 py-0.5 font-mono">
@@ -164,9 +207,27 @@ export default function AccessibleDocumentReader({
           </span>
         </div>
 
-        <span className="rounded-full bg-[#fffcf6] px-3 py-1 font-bold">
-          Block {focusedIndex + 1} of {orderedBlocks.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const brf = buildBrfFallbackContent(documentRecord);
+              const blob = new Blob([brf], { type: "text/plain;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${documentRecord.title.replace(/[^a-z0-9]+/gi, "_")}.brf`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="rounded-full border border-[#211f1b] bg-[#fffcf6] px-3 py-1 text-xs font-bold text-[#211f1b] transition-colors hover:bg-[#ffe08a]"
+          >
+            Download .BRF
+          </button>
+          <span className="rounded-full bg-[#fffcf6] px-3 py-1 font-bold">
+            Block {focusedIndex + 1} of {orderedBlocks.length}
+          </span>
+        </div>
       </section>
 
       {/* Document Content Blocks */}
@@ -216,17 +277,29 @@ export default function AccessibleDocumentReader({
 
               {block.type === "heading" && block.headingLevel === "H1" && (
                 <h2 className="ink-heading text-2xl sm:text-3xl text-[#211f1b]">
-                  {block.content}
+                  {block.content || (
+                    <span className="text-base font-normal italic text-[#7c2d12]">
+                      No OCR text extracted for this heading yet.
+                    </span>
+                  )}
                 </h2>
               )}
               {block.type === "heading" && block.headingLevel === "H2" && (
                 <h3 className="text-xl font-extrabold text-[#211f1b]">
-                  {block.content}
+                  {block.content || (
+                    <span className="text-base font-normal italic text-[#7c2d12]">
+                      No OCR text extracted for this heading yet.
+                    </span>
+                  )}
                 </h3>
               )}
               {block.type === "heading" && block.headingLevel === "H3" && (
                 <h4 className="text-lg font-bold text-[#211f1b]">
-                  {block.content}
+                  {block.content || (
+                    <span className="text-base font-normal italic text-[#7c2d12]">
+                      No OCR text extracted for this heading yet.
+                    </span>
+                  )}
                 </h4>
               )}
 
@@ -243,8 +316,25 @@ export default function AccessibleDocumentReader({
               {block.type === "equation" && (
                 <div className="space-y-2 rounded-2xl border border-[#d9d0c3] bg-[#f5f0ff]/60 p-4">
                   <p className="font-mono text-base font-bold text-[#4c1d95]">
-                    {block.math?.latex ?? block.content}
+                    {block.math?.latex || block.content || (
+                      <span className="font-sans text-sm font-normal italic text-[#7c2d12]">
+                        No equation OCR text extracted for this block yet.
+                      </span>
+                    )}
                   </p>
+                  {block.math?.mathml && (
+                    <div
+                      aria-label="MathML equation"
+                      className="overflow-x-auto rounded-lg bg-white/80 p-2 text-sm text-[#211f1b]"
+                      dangerouslySetInnerHTML={{ __html: block.math.mathml }}
+                    />
+                  )}
+                  {block.math?.nemeth && (
+                    <p className="font-mono text-xs text-[#3b362f]">
+                      <span className="font-bold">Nemeth Braille:</span>{" "}
+                      {block.math.nemeth}
+                    </p>
+                  )}
                   {block.math?.spokenText && (
                     <p className="text-sm text-[#3b362f]">
                       <span className="font-bold">Spoken form:</span>{" "}

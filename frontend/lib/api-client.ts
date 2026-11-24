@@ -21,6 +21,14 @@ export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 ).replace(/\/+$/, "");
 
+export const DIAGRAM_API_URL = (
+  process.env.NEXT_PUBLIC_DIAGRAM_API_URL ?? "http://localhost:8001"
+).replace(/\/+$/, "");
+
+export const TRANSCRIPTION_API_URL = (
+  process.env.NEXT_PUBLIC_TRANSCRIPTION_API_URL ?? "http://localhost:8002"
+).replace(/\/+$/, "");
+
 export function isDemoMode(): boolean {
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "false" && API_BASE_URL) {
     return false;
@@ -423,6 +431,14 @@ export async function updateBlockVerification(
     if (typeof update.content === "string") {
       block.content = update.content;
     }
+    if (typeof update.correctedNetlist === "string") {
+      block.diagram = {
+        title: block.diagram?.title ?? "Circuit Schematic",
+        description: block.diagram?.description ?? block.content,
+        spiceNetlist: update.correctedNetlist,
+        nodesSummary: block.diagram?.nodesSummary,
+      };
+    }
     if (typeof update.reviewerNote === "string") {
       block.reviewerNote = update.reviewerNote;
     }
@@ -446,6 +462,9 @@ export async function updateBlockVerification(
   };
   if (typeof update.content === "string") {
     payload.corrected_text = update.content;
+  }
+  if (typeof update.correctedNetlist === "string") {
+    payload.corrected_netlist = update.correctedNetlist;
   }
 
   const res = await fetch(`${API_BASE_URL}/blocks/${blockId}/verification`, {
@@ -500,6 +519,97 @@ export async function publishDocument(docId: string): Promise<{
     );
   }
   return res.json();
+}
+
+export async function analyzeDiagramCrop(cropUrl: string): Promise<{
+  summary: string;
+  spiceNetlist: string;
+  confidenceScore: number;
+}> {
+  const imgRes = await fetch(cropUrl);
+  if (!imgRes.ok) {
+    throw new Error(`Could not fetch diagram crop (${imgRes.status})`);
+  }
+  const blob = await imgRes.blob();
+  const formData = new FormData();
+  formData.append("file", blob, "diagram_crop.png");
+
+  const res = await fetch(`${DIAGRAM_API_URL}/process-diagram`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    throw new Error(`Diagram Engine error (${res.status})`);
+  }
+  const data = await res.json();
+  return {
+    summary: data.summary ?? "",
+    spiceNetlist: data.spice_netlist ?? "",
+    confidenceScore: data.confidence_score ?? 0,
+  };
+}
+
+export async function transcribeMathCrop(cropUrl: string): Promise<{
+  latex: string;
+  mathml: string;
+  nemeth: string;
+}> {
+  const imgRes = await fetch(cropUrl);
+  if (!imgRes.ok) {
+    throw new Error(`Could not fetch equation crop (${imgRes.status})`);
+  }
+  const blob = await imgRes.blob();
+  const formData = new FormData();
+  formData.append("file", blob, "math_crop.png");
+
+  const res = await fetch(
+    `${TRANSCRIPTION_API_URL}/api/v1/transcription/process-math-crop`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Transcription Engine error (${res.status})`);
+  }
+  const json = await res.json();
+  return {
+    latex: json.data?.latex ?? "",
+    mathml: json.data?.mathml ?? "",
+    nemeth: json.data?.nemeth ?? "",
+  };
+}
+
+export function buildBrfFallbackContent(doc: DocumentRecord): string {
+  const lines: string[] = [
+    `DRISHTIVANI ACCESSIBLE BRAILLE EXPORT`,
+    `TITLE: ${doc.title}`,
+    `========================================`,
+    "",
+  ];
+  for (const b of doc.blocks) {
+    if (b.verificationStatus === "rejected") continue;
+    if (b.type === "heading") {
+      lines.push(`[${b.headingLevel ?? "HEADING"}] ${b.content}`);
+    } else if (b.type === "equation") {
+      lines.push(`[EQUATION] ${b.math?.nemeth ?? b.math?.latex ?? b.content}`);
+    } else if (b.type === "diagram") {
+      lines.push(`[DIAGRAM] ${b.diagram?.description ?? b.content}`);
+      if (b.diagram?.spiceNetlist) {
+        lines.push(b.diagram.spiceNetlist);
+      }
+    } else if (b.type === "table" && b.table) {
+      lines.push(`[TABLE] ${b.table.caption}`);
+      lines.push(b.table.headers.join(" | "));
+      for (const row of b.table.rows) {
+        lines.push(row.join(" | "));
+      }
+    } else if (b.content) {
+      lines.push(b.content);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 
 export async function uploadDemoDocument(

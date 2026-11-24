@@ -58,8 +58,14 @@ function StudentStudyInner() {
   }, [docId]);
 
   return (
-    <main className="min-h-screen p-5 sm:p-8">
-      <div className="mx-auto max-w-4xl">
+    <div className="min-h-screen p-5 sm:p-8">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:border-2 focus:border-[#211f1b] focus:bg-[#ffe08a] focus:px-5 focus:py-3 focus:text-base focus:font-bold focus:text-[#211f1b]"
+      >
+        Skip to main content
+      </a>
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-4xl focus:outline-none">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#d9d0c3] pb-5">
           <Link
             href="/student"
@@ -116,8 +122,8 @@ function StudentStudyInner() {
             <AccessibleDocumentReader documentRecord={documentRecord} />
           </>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 
