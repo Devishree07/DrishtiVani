@@ -144,6 +144,8 @@ class IngestionPipeline:
                             image=page_pil_image,
                             width_px=width_px,
                             height_px=height_px,
+                            pdf_bytes=pdf_bytes,
+                            page_number=page_num,
                         )
 
                         logger.info(
@@ -180,6 +182,7 @@ class IngestionPipeline:
 
                                     # Stage 2: Hand off Circuit Diagrams to Member 2 Diagram Engine
                                     if b_type == BlockType.DIAGRAM.value:
+                                        diag_handled = False
                                         try:
                                             import sys
                                             from pathlib import Path
@@ -222,37 +225,74 @@ class IngestionPipeline:
                                             ]
                                             if diag_result.needs_teacher_review:
                                                 blk.needs_review = True
+                                            diag_handled = True
+                                        except ImportError:
+                                            # Local cv2/ultralytics not in this venv; call Diagram Engine microservice (port 8001)
+                                            try:
+                                                import httpx
+                                                with httpx.Client(timeout=15.0) as http_client:
+                                                    resp = http_client.post(
+                                                        "http://127.0.0.1:8001/process-diagram",
+                                                        files={"file": ("diagram_crop.png", crop_bytes, "image/png")},
+                                                    )
+                                                if resp.status_code == 200:
+                                                    diag_json = resp.json()
+                                                    extracted_text = diag_json.get("summary") or extra_data.get("diagram_labels") or "Circuit diagram detected"
+                                                    extra_data["circuit_netlist"] = diag_json.get("spice_netlist", "")
+                                                    extra_data["circuit_summary"] = extracted_text
+                                                    extra_data["diagram_confidence"] = diag_json.get("confidence_score", 0.5)
+                                                    extra_data["circuit_nodes"] = diag_json.get("nodes", [])
+                                                    if diag_json.get("needs_teacher_review", True):
+                                                        blk.needs_review = True
+                                                    diag_handled = True
+                                            except Exception as http_err:
+                                                logger.warning("Diagram Engine HTTP fallback failed on block %s: %s", block_id, http_err)
                                         except Exception as diag_err:
                                             logger.warning("Diagram engine processing failed on block %s: %s", block_id, diag_err)
 
+                                        if not diag_handled and extra_data.get("diagram_labels"):
+                                            extracted_text = f"Circuit diagram ({extra_data['diagram_labels']})"
+
                                 except Exception as crop_err:
                                     logger.warning("Failed to store crop for block %s: %s", block_id, crop_err)
-                                # Equations deliberately have extracted_text = None until Member 3 parses them
+                                # Use pre-extracted equation text if native PDF extraction produced it;
+                                # otherwise leave None until Member 3 transcribes the crop.
+                                if b_type == BlockType.EQUATION.value and "extracted_text" in extra_data:
+                                    extracted_text = str(extra_data.pop("extracted_text"))
+                                    ocr_confidence = 0.92
 
                             # Handling tabular data
                             elif b_type == BlockType.TABLE.value:
-                                try:
-                                    crop_img = self.ocr_service.crop_region(page_pil_image, bbox)
-                                    table_grid, table_text = self.table_service.parse_table(crop_img, bbox)
-                                    extracted_text = table_text
-                                    extra_data["table"] = table_grid.model_dump()
-                                    ocr_confidence = 0.85
-                                except Exception as tbl_err:
-                                    logger.warning("Table parsing error on block %s: %s", block_id, tbl_err)
-                                    extracted_text = ""
-                                    ocr_confidence = 0.50
+                                if extra_data.get("table") and "extracted_text" in extra_data:
+                                    extracted_text = str(extra_data.pop("extracted_text"))
+                                    ocr_confidence = 0.94
+                                else:
+                                    try:
+                                        crop_img = self.ocr_service.crop_region(page_pil_image, bbox)
+                                        table_grid, table_text = self.table_service.parse_table(crop_img, bbox)
+                                        extracted_text = table_text
+                                        extra_data["table"] = table_grid.model_dump()
+                                        ocr_confidence = 0.85
+                                    except Exception as tbl_err:
+                                        logger.warning("Table parsing error on block %s: %s", block_id, tbl_err)
+                                        extracted_text = ""
+                                        ocr_confidence = 0.50
 
                             # Handling textual content (text, headings, lists, captions)
                             elif self.ocr_service.is_ocr_target(b_type):
-                                try:
-                                    crop_img = self.ocr_service.crop_region(page_pil_image, bbox)
-                                    txt, conf = self.ocr_service.recognize_text(crop_img)
-                                    extracted_text = txt
-                                    ocr_confidence = conf
-                                except Exception as ocr_err:
-                                    logger.warning("OCR failed on block %s: %s", block_id, ocr_err)
-                                    extracted_text = ""
-                                    ocr_confidence = 0.50
+                                if "extracted_text" in extra_data:
+                                    extracted_text = str(extra_data.pop("extracted_text"))
+                                    ocr_confidence = 0.96
+                                else:
+                                    try:
+                                        crop_img = self.ocr_service.crop_region(page_pil_image, bbox)
+                                        txt, conf = self.ocr_service.recognize_text(crop_img)
+                                        extracted_text = txt
+                                        ocr_confidence = conf
+                                    except Exception as ocr_err:
+                                        logger.warning("OCR failed on block %s: %s", block_id, ocr_err)
+                                        extracted_text = ""
+                                        ocr_confidence = 0.50
 
                             # Determine teacher review flag (Stage 3 Gate: < 0.88 Threshold)
                             needs_review = (

@@ -115,21 +115,28 @@ class LayoutService:
         image: Image.Image,
         width_px: int,
         height_px: int,
+        pdf_bytes: Optional[bytes] = None,
+        page_number: Optional[int] = None,
     ) -> List[DetectedBlock]:
         """Detect and classify all layout regions on a page image.
 
-        Processes the image through Surya layout detection, normalizes bounding
-        boxes to pixel space, maps model labels to semantic BlockType enum values,
-        infers heading hierarchy (H1-H3), and determines logical reading order.
-
-        Args:
-            image: PIL Image object of the rendered page.
-            width_px: Pixel width of the page image.
-            height_px: Pixel height of the page image.
-
-        Returns:
-            List[DetectedBlock]: Detected blocks sorted in logical reading order.
+        Uses PyMuPDF native vector/text/table extraction when selectable PDF
+        content is available, falling back to Surya layout detection or
+        heuristic region extraction for scanned images.
         """
+        if pdf_bytes is not None and page_number is not None:
+            try:
+                native_blocks = self._pymupdf_extract_blocks(
+                    pdf_bytes=pdf_bytes,
+                    page_number=page_number,
+                    width_px=width_px,
+                    height_px=height_px,
+                )
+                if native_blocks:
+                    return native_blocks
+            except Exception as pdf_err:
+                logger.warning("PyMuPDF native extraction failed on page %s: %s", page_number, pdf_err)
+
         raw_boxes: List[Dict[str, Any]] = []
 
         try:
@@ -405,6 +412,227 @@ class LayoutService:
             logger.warning("Heuristic fallback failed: %s", e)
 
         return boxes
+
+    def _pymupdf_extract_blocks(
+        self,
+        pdf_bytes: bytes,
+        page_number: int,
+        width_px: int,
+        height_px: int,
+    ) -> Optional[List[DetectedBlock]]:
+        """Extract headings, paragraphs, lists, tables, and schematics via PyMuPDF."""
+        import pymupdf
+
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            if page_number < 1 or page_number > len(doc):
+                return None
+            page = doc[page_number - 1]
+            if len(page.get_text("text").strip()) < 10:
+                return None
+
+            rect = page.rect
+            sx = width_px / rect.width if rect.width else 1.0
+            sy = height_px / rect.height if rect.height else 1.0
+
+            def to_px(box: Tuple[float, float, float, float]) -> List[float]:
+                x0 = max(0.0, min(float(width_px), round(box[0] * sx, 2)))
+                y0 = max(0.0, min(float(height_px), round(box[1] * sy, 2)))
+                x1 = max(0.0, min(float(width_px), round(box[2] * sx, 2)))
+                y1 = max(0.0, min(float(height_px), round(box[3] * sy, 2)))
+                return [x0, y0, x1, y1]
+
+            items: List[Dict[str, Any]] = []
+            table_rects: List[Any] = []
+            diagram_rects: List[Any] = []
+
+            # 1. Tables via PyMuPDF find_tables()
+            try:
+                for tab in page.find_tables().tables:
+                    t_rect = pymupdf.Rect(tab.bbox)
+                    raw_grid = tab.extract() or []
+                    if not raw_grid:
+                        continue
+                    px_bbox = to_px(tab.bbox)
+                    rows_payload = []
+                    row_lines = []
+                    for r_idx, row in enumerate(raw_grid):
+                        cells = []
+                        row_strs = []
+                        for c_idx, cell_val in enumerate(row):
+                            clean_cell = " ".join((cell_val or "").split())
+                            row_strs.append(clean_cell)
+                            cells.append({
+                                "row": r_idx,
+                                "col": c_idx,
+                                "row_span": 1,
+                                "col_span": 1,
+                                "text": clean_cell,
+                                "is_header": r_idx == 0,
+                                "bbox": px_bbox,
+                            })
+                        rows_payload.append({"row_index": r_idx, "cells": cells})
+                        row_lines.append(" | ".join(row_strs))
+
+                    table_rects.append(t_rect)
+                    items.append({
+                        "y": tab.bbox[1],
+                        "x": tab.bbox[0],
+                        "block_type": BlockType.TABLE.value,
+                        "bbox": px_bbox,
+                        "confidence": 0.94,
+                        "needs_review": False,
+                        "extra": {
+                            "table": {"rows": rows_payload},
+                            "extracted_text": "\n".join(row_lines),
+                        },
+                    })
+            except Exception as tbl_err:
+                logger.debug("PyMuPDF table detection skipped on page %s: %s", page_number, tbl_err)
+
+            # 2. Vector schematic clusters & embedded raster images -> Diagrams
+            def overlaps_any(candidate: Any, refs: List[Any], min_ratio: float = 0.25) -> bool:
+                cand_area = max(candidate.get_area(), 1.0)
+                for ref in refs:
+                    inter = candidate & ref
+                    if inter.get_area() / cand_area >= min_ratio:
+                        return True
+                return False
+
+            try:
+                for cluster in page.cluster_drawings():
+                    c_rect = pymupdf.Rect(cluster)
+                    if c_rect.width < 40 or c_rect.height < 12:
+                        continue
+                    if overlaps_any(c_rect, table_rects):
+                        continue
+                    # Text callout boxes have full prose inside a single border; schematics have few label words
+                    inside_words = page.get_text("text", clip=c_rect).split()
+                    if len(inside_words) > 12:
+                        continue
+                    padded = pymupdf.Rect(
+                        max(0.0, c_rect.x0 - 15.0),
+                        max(0.0, c_rect.y0 - 20.0),
+                        min(rect.width, c_rect.x1 + 15.0),
+                        min(rect.height, c_rect.y1 + 20.0),
+                    )
+                    label_text = " ".join(page.get_text("text", clip=padded).split())
+                    diagram_rects.append(padded)
+                    items.append({
+                        "y": padded.y0,
+                        "x": padded.x0,
+                        "block_type": BlockType.DIAGRAM.value,
+                        "bbox": to_px((padded.x0, padded.y0, padded.x1, padded.y1)),
+                        "confidence": 0.85,
+                        "needs_review": True,
+                        "extra": {"diagram_labels": label_text} if label_text else None,
+                    })
+
+                for img_info in page.get_image_info(xrefs=True):
+                    i_rect = pymupdf.Rect(img_info["bbox"])
+                    if i_rect.width < 50 or i_rect.height < 50:
+                        continue
+                    if overlaps_any(i_rect, table_rects) or overlaps_any(i_rect, diagram_rects):
+                        continue
+                    diagram_rects.append(i_rect)
+                    items.append({
+                        "y": i_rect.y0,
+                        "x": i_rect.x0,
+                        "block_type": BlockType.DIAGRAM.value,
+                        "bbox": to_px((i_rect.x0, i_rect.y0, i_rect.x1, i_rect.y1)),
+                        "confidence": 0.85,
+                        "needs_review": True,
+                        "extra": None,
+                    })
+            except Exception as diag_err:
+                logger.debug("PyMuPDF diagram cluster detection skipped on page %s: %s", page_number, diag_err)
+
+            # 3. Text blocks, headings (H1-H3), and lists
+            text_dict = page.get_text("dict")
+            raw_text_blocks = [b for b in text_dict.get("blocks", []) if b.get("type") == 0]
+            all_sizes = [
+                float(s["size"])
+                for b in raw_text_blocks
+                for line in b.get("lines", [])
+                for s in line.get("spans", [])
+                if s.get("text", "").strip()
+            ]
+            median_size = sorted(all_sizes)[len(all_sizes) // 2] if all_sizes else 10.0
+            threshold = self.settings.CONFIDENCE_THRESHOLD
+
+            for b in raw_text_blocks:
+                bx0, by0, bx1, by1 = b["bbox"]
+                if bx1 <= bx0 or by1 <= by0:
+                    continue
+                center = pymupdf.Point((bx0 + bx1) / 2.0, (by0 + by1) / 2.0)
+                if any(r.contains(center) for r in table_rects):
+                    continue
+                if any(r.contains(center) for r in diagram_rects):
+                    continue
+
+                spans = [
+                    s
+                    for line in b.get("lines", [])
+                    for s in line.get("spans", [])
+                    if s.get("text", "").strip()
+                ]
+                if not spans:
+                    continue
+
+                clean_text = " ".join(" ".join(s["text"].split()) for s in spans).strip()
+                if not clean_text:
+                    continue
+
+                max_size = max(float(s["size"]) for s in spans)
+                extra: Dict[str, Any] = {"extracted_text": clean_text}
+
+                if max_size >= max(19.0, median_size * 1.9):
+                    b_type = BlockType.HEADING_H1.value
+                    extra["heading_level"] = 1
+                elif max_size >= max(15.0, median_size * 1.5):
+                    b_type = BlockType.HEADING_H2.value
+                    extra["heading_level"] = 2
+                elif max_size >= max(12.0, median_size * 1.22):
+                    b_type = BlockType.HEADING_H3.value
+                    extra["heading_level"] = 3
+                elif clean_text.startswith(("•", "-", "▪")) and len(clean_text) < 220:
+                    b_type = BlockType.LIST_ITEM.value
+                else:
+                    from app.services.math_utils import build_math_payload, is_equation_block
+                    if is_equation_block(clean_text):
+                        b_type = BlockType.EQUATION.value
+                        extra["math"] = build_math_payload(clean_text)
+                    else:
+                        b_type = BlockType.TEXT.value
+
+                conf = 0.96
+                items.append({
+                    "y": by0,
+                    "x": bx0,
+                    "block_type": b_type,
+                    "bbox": to_px((bx0, by0, bx1, by1)),
+                    "confidence": conf,
+                    "needs_review": conf < threshold,
+                    "extra": extra,
+                })
+
+            if not items:
+                return None
+
+            items.sort(key=lambda it: (round(it["y"] / 10.0), it["x"]))
+            return [
+                DetectedBlock(
+                    block_type=it["block_type"],
+                    reading_order=idx,
+                    bbox=it["bbox"],
+                    layout_confidence=it["confidence"],
+                    needs_review=it["needs_review"],
+                    extra=it["extra"],
+                )
+                for idx, it in enumerate(items)
+            ]
+        finally:
+            doc.close()
 
 
 _layout_service: Optional[LayoutService] = None

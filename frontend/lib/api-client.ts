@@ -193,6 +193,11 @@ function mapBackendBlock(
       ? b.extra.circuit_netlist
       : undefined;
 
+  const rawMath =
+    b.extra && typeof b.extra.math === "object" && b.extra.math !== null
+      ? (b.extra.math as Record<string, unknown>)
+      : null;
+
   return {
     id: b.id,
     pageNumber,
@@ -201,6 +206,22 @@ function mapBackendBlock(
     rawType: b.type,
     headingLevel,
     content: b.text ?? "",
+    math:
+      type === "equation" && (rawMath || b.text)
+        ? {
+            latex:
+              (typeof rawMath?.latex === "string" ? rawMath.latex : "") ||
+              (b.text ?? ""),
+            spokenText:
+              (typeof rawMath?.spoken_text === "string"
+                ? rawMath.spoken_text
+                : "") || (b.text ?? ""),
+            mathml:
+              typeof rawMath?.mathml === "string" ? rawMath.mathml : undefined,
+            nemeth:
+              typeof rawMath?.nemeth === "string" ? rawMath.nemeth : undefined,
+          }
+        : undefined,
     table: mapTableGrid(b.table),
     diagram:
       type === "diagram"

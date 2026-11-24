@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { analyzeDiagramCrop, transcribeMathCrop } from "@/lib/api-client";
 import { CONFIDENCE_REVIEW_THRESHOLD } from "@/lib/mock-data";
+import { getSpeakableText } from "@/lib/speech";
 import type {
   BlockVerificationUpdate,
   ExtractedBlock,
 } from "@/types/document";
+
+const emptySubscribe = () => () => {};
+const getSpeechSupported = () =>
+  typeof window !== "undefined" && "speechSynthesis" in window;
+const getServerSnapshot = () => false;
 
 interface BlockEditorControlsProps {
   block: ExtractedBlock | null;
@@ -27,13 +34,49 @@ export default function BlockEditorControls({
   const [saving, setSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const speechSupported = useSyncExternalStore(
+    emptySubscribe,
+    getSpeechSupported,
+    getServerSnapshot,
+  );
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   if (!block) {
     return (
-      <div className="paper-card p-5 text-sm font-semibold text-[#3b362f]">
-        Select a block or bounding box to inspect, edit, approve, or reject.
+      <div className="paper-card p-5 text-sm font-medium text-slate-600">
+        Select a block or bounding box to inspect, edit, preview audio, approve,
+        or reject.
       </div>
     );
+  }
+
+  const spokenPreview = isEditing
+    ? draftContent.trim() || getSpeakableText(block)
+    : getSpeakableText(block);
+
+  function toggleAudioPreview() {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(spokenPreview);
+    utterance.rate = 0.95;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    synth.speak(utterance);
   }
 
   const isFlagged =
@@ -107,25 +150,25 @@ export default function BlockEditorControls({
 
   return (
     <div className="paper-card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e4dccf] pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
         <div>
-          <h3 className="text-base font-extrabold text-[#211f1b]">
+          <h3 className="text-base font-bold text-slate-900">
             Block #{block.order} ·{" "}
             {block.headingLevel
               ? `Heading ${block.headingLevel}`
               : (block.rawType ?? block.type).toUpperCase()}
           </h3>
-          <p className="text-xs text-[#3b362f]">
+          <p className="text-xs text-slate-500">
             BBox: ({Math.round(block.bbox.x)}, {Math.round(block.bbox.y)}) ·{" "}
             {Math.round(block.bbox.width)}×{Math.round(block.bbox.height)}px
           </p>
         </div>
 
         <span
-          className={`rounded-full px-3 py-1 text-xs font-bold ${
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${
             isFlagged
-              ? "bg-[#fde2e1] text-[#991b1b]"
-              : "bg-[#e3f2d9] text-[#213a18]"
+              ? "bg-rose-100 text-rose-800"
+              : "bg-emerald-100 text-emerald-800"
           }`}
         >
           Layout: {(block.layoutConfidence ?? block.confidence).toFixed(2)}
@@ -133,6 +176,44 @@ export default function BlockEditorControls({
             ? ` · OCR: ${block.ocrConfidence.toFixed(2)}`
             : ""}
         </span>
+      </div>
+
+      {/* Student Audio Preview */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-blue-700">
+            Student audio preview
+          </p>
+          <p className="mt-0.5 truncate text-xs text-slate-700" title={spokenPreview}>
+            &ldquo;{spokenPreview}&rdquo;
+          </p>
+        </div>
+        {speechSupported && (
+          <button
+            type="button"
+            onClick={toggleAudioPreview}
+            aria-pressed={speaking}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              speaking
+                ? "bg-slate-900 text-white"
+                : "border border-blue-200 bg-white text-blue-700 hover:bg-blue-100/70"
+            }`}
+          >
+            <Image
+              src={
+                speaking
+                  ? "/icons/alerts-stop-sign.svg"
+                  : "/icons/volume-control-up-1.svg"
+              }
+              alt=""
+              width={15}
+              height={15}
+              aria-hidden="true"
+              draggable={false}
+            />
+            <span>{speaking ? "Stop audio" : "Preview audio"}</span>
+          </button>
+        )}
       </div>
 
       {saveError && (
@@ -234,20 +315,33 @@ export default function BlockEditorControls({
             </div>
           )}
 
+          {block.diagram?.nodesSummary && block.diagram.nodesSummary.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                Circuit Node Breakdown ({block.diagram.nodesSummary.length} nodes)
+              </p>
+              <ul className="mt-1.5 space-y-1 text-xs text-slate-700">
+                {block.diagram.nodesSummary.map((nodeDesc, idx) => (
+                  <li key={`${block.id}-node-${idx}`}>{nodeDesc}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {block.diagram?.spiceNetlist && (
-            <pre className="overflow-x-auto rounded-xl border border-[#d9d0c3] bg-[#211f1b] p-3 font-mono text-xs text-[#ffe08a]">
+            <pre className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-900 p-3 font-mono text-xs text-amber-200">
               {block.diagram.spiceNetlist}
             </pre>
           )}
 
-          <div className="flex flex-wrap gap-2.5 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
               disabled={saving}
               onClick={() =>
                 handleAction({ verificationStatus: "approved" })
               }
-              className="rounded-full border-2 border-[#211f1b] bg-[#d4f2c4] px-4 py-2 text-xs font-extrabold text-[#16330c] transition-colors hover:bg-[#bfe8a9]"
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-emerald-700 active:scale-95"
             >
               Approve
             </button>
@@ -255,7 +349,7 @@ export default function BlockEditorControls({
               type="button"
               disabled={saving}
               onClick={startEditing}
-              className="rounded-full border-2 border-[#211f1b] bg-[#ffe08a] px-4 py-2 text-xs font-extrabold text-[#211f1b] transition-colors hover:bg-[#ffd35c]"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 active:scale-95"
             >
               Edit
             </button>
@@ -265,7 +359,7 @@ export default function BlockEditorControls({
               onClick={() =>
                 handleAction({ verificationStatus: "rejected" })
               }
-              className="rounded-full border-2 border-[#211f1b] bg-[#fde2e1] px-4 py-2 text-xs font-extrabold text-[#7f1d1d] transition-colors hover:bg-[#fbc5c3]"
+              className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 active:scale-95"
             >
               Reject
             </button>

@@ -2,31 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { buildBrfFallbackContent } from "@/lib/api-client";
+import { getSpeakableText } from "@/lib/speech";
 import type { DocumentRecord, ExtractedBlock } from "@/types/document";
 
 interface AccessibleDocumentReaderProps {
   documentRecord: DocumentRecord;
-}
-
-function getSpeakableText(block: ExtractedBlock): string {
-  if (block.type === "heading") {
-    return `${block.headingLevel ?? "Heading"}: ${block.content}`;
-  }
-  if (block.type === "equation" && block.math) {
-    return `Equation. ${block.math.spokenText}`;
-  }
-  if (block.type === "table" && block.table) {
-    const rowText = block.table.rows
-      .map((r) =>
-        r.map((cell, i) => `${block.table?.headers[i] ?? "Col"}: ${cell}`).join(", "),
-      )
-      .join(". ");
-    return `Table: ${block.table.caption}. ${rowText}`;
-  }
-  if (block.type === "diagram" && block.diagram) {
-    return `Diagram: ${block.diagram.title}. ${block.diagram.description}`;
-  }
-  return block.content;
 }
 
 export default function AccessibleDocumentReader({

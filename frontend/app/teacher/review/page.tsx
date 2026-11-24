@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import DemoModeBanner from "@/components/DemoModeBanner";
+import ReadAloudButton from "@/components/ReadAloudButton";
 import BlockEditorControls from "@/components/review/BlockEditorControls";
 import ExtractedBlocksPanel from "@/components/review/ExtractedBlocksPanel";
 import PagePreviewCanvas from "@/components/review/PagePreviewCanvas";
@@ -15,6 +16,7 @@ import {
   resetDemoDocuments,
   updateBlockVerification,
 } from "@/lib/api-client";
+import { getSpeakableText } from "@/lib/speech";
 import type {
   BlockVerificationUpdate,
   DocumentRecord,
@@ -256,13 +258,18 @@ function ReviewConsoleInner() {
           <>
             {/* Page pagination bar */}
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-[#3b362f]">
+              <p className="text-sm font-semibold text-slate-600">
                 {currentDoc.title} · Status:{" "}
-                <span className="font-extrabold text-[#211f1b]">
+                <span className="font-bold text-slate-900">
                   {currentDoc.processingStatus}
                 </span>
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {pageBlocks.length > 0 && (
+                  <ReadAloudButton
+                    text={pageBlocks.map(getSpeakableText).join(". ")}
+                  />
+                )}
                 {currentDoc.pages.map((p) => {
                   const active = p.pageNumber === currentPage.pageNumber;
                   return (
@@ -270,10 +277,10 @@ function ReviewConsoleInner() {
                       key={p.pageNumber}
                       type="button"
                       onClick={() => handleChangePage(p.pageNumber)}
-                      className={`rounded-full border-2 px-3.5 py-1 text-xs font-bold transition-colors ${
+                      className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                         active
-                          ? "border-[#211f1b] bg-[#ffe08a] text-[#211f1b]"
-                          : "border-[#d9d0c3] bg-[#fffcf6] text-[#3b362f] hover:border-[#211f1b]"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                       }`}
                     >
                       Page {p.pageNumber}
