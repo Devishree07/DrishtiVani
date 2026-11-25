@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DemoModeBanner from "@/components/DemoModeBanner";
-import { fetchDocuments, isDemoMode } from "@/lib/api-client";
+import { fetchDocumentById, fetchDocuments, isDemoMode } from "@/lib/api-client";
+import { getOrderedReadableBlocks, speakBlockSequence } from "@/lib/speech";
 import type { DocumentRecord } from "@/types/document";
 
 const categories = ["All", "Notes", "Equations", "Diagrams"] as const;
@@ -23,6 +24,69 @@ export default function StudentDashboard() {
   const [query, setQuery] = useState("");
   const [category, setCategory] =
     useState<(typeof categories)[number]>("All");
+  const [playingDocId, setPlayingDocId] = useState<string | null>(null);
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
+  const [audioStatus, setAudioStatus] = useState<string | null>(null);
+  const cancelAudioRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      cancelAudioRef.current?.();
+    };
+  }, []);
+
+  function stopFullAudio() {
+    cancelAudioRef.current?.();
+    cancelAudioRef.current = null;
+    setPlayingDocId(null);
+    setAudioStatus(null);
+  }
+
+  async function handleToggleFullAudio(doc: DocumentRecord) {
+    if (playingDocId === doc.id) {
+      stopFullAudio();
+      return;
+    }
+    stopFullAudio();
+    setLoadingAudioId(doc.id);
+    setError(null);
+    try {
+      const fullDoc =
+        doc.blocks.length > 0 ? doc : await fetchDocumentById(doc.id);
+      if (!fullDoc) {
+        throw new Error("Could not load document content for audio.");
+      }
+      const readable = getOrderedReadableBlocks(fullDoc);
+      if (readable.length === 0) {
+        setAudioStatus(`No readable content in ${doc.title}.`);
+        return;
+      }
+      setPlayingDocId(doc.id);
+      cancelAudioRef.current = speakBlockSequence(readable, 0, {
+        onBlockStart: (idx, blk) => {
+          setAudioStatus(
+            `Playing "${doc.title}" · Block ${idx + 1} of ${readable.length} (Page ${blk.pageNumber})`,
+          );
+        },
+        onComplete: () => {
+          setPlayingDocId(null);
+          setAudioStatus(null);
+          cancelAudioRef.current = null;
+        },
+        onError: () => {
+          setPlayingDocId(null);
+          setAudioStatus("Audio playback failed or unsupported in this browser.");
+          cancelAudioRef.current = null;
+        },
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start full audio.",
+      );
+    } finally {
+      setLoadingAudioId(null);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -179,6 +243,23 @@ export default function StudentDashboard() {
         <section className="reveal reveal-3 mt-8">
           <h2 className="text-xl font-extrabold">Published Materials</h2>
 
+          {audioStatus && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="paper-card mt-4 flex flex-wrap items-center justify-between gap-3 border-blue-200 bg-blue-50/80 px-5 py-3 text-sm text-slate-900"
+            >
+              <span className="font-semibold">{audioStatus}</span>
+              <button
+                type="button"
+                onClick={stopFullAudio}
+                className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+              >
+                Stop audio
+              </button>
+            </div>
+          )}
+
           {error ? (
             <div
               role="alert"
@@ -248,18 +329,37 @@ export default function StudentDashboard() {
                       {doc.totalPages === 1 ? "page" : "pages"} · {blockCount}{" "}
                       accessible blocks
                     </p>
-                    <Link
-                      href={`/student/study?docId=${encodeURIComponent(doc.id)}`}
-                      className="sketch-button mt-6 w-full"
-                    >
-                      <span>Open reader</span>
-                      <span
-                        aria-hidden="true"
-                        className="inline-block transition-transform duration-200 group-hover:translate-x-1"
+                    <div className="mt-6 flex w-full flex-col gap-2.5">
+                      <button
+                        type="button"
+                        disabled={loadingAudioId === doc.id}
+                        onClick={() => void handleToggleFullAudio(doc)}
+                        aria-pressed={playingDocId === doc.id}
+                        className={
+                          playingDocId === doc.id
+                            ? "w-full rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-slate-800"
+                            : "sketch-button w-full"
+                        }
                       >
-                        →
-                      </span>
-                    </Link>
+                        {loadingAudioId === doc.id
+                          ? "Loading full audio..."
+                          : playingDocId === doc.id
+                            ? "Stop Full Audio"
+                            : "Listen Full Audio"}
+                      </button>
+                      <Link
+                        href={`/student/study?docId=${encodeURIComponent(doc.id)}`}
+                        className="sketch-button-secondary w-full"
+                      >
+                        <span>Open reader</span>
+                        <span
+                          aria-hidden="true"
+                          className="inline-block transition-transform duration-200 group-hover:translate-x-1"
+                        >
+                          →
+                        </span>
+                      </Link>
+                    </div>
                   </article>
                 );
               })}

@@ -1,4 +1,4 @@
-import type { ExtractedBlock } from "@/types/document";
+import type { DocumentRecord, ExtractedBlock } from "@/types/document";
 
 function normalizeMathSpeech(text: string): string {
   return text
@@ -53,4 +53,87 @@ export function getSpeakableText(block: ExtractedBlock): string {
   return normalizeMathSpeech(
     block.content || "No extracted text available for this block.",
   );
+}
+
+/** Returns non-rejected blocks sorted in natural page/reading order. */
+export function getOrderedReadableBlocks(
+  doc: DocumentRecord,
+): ExtractedBlock[] {
+  return [...doc.blocks]
+    .filter((b) => b.verificationStatus !== "rejected")
+    .sort((a, b) =>
+      a.pageNumber !== b.pageNumber
+        ? a.pageNumber - b.pageNumber
+        : a.order - b.order,
+    );
+}
+
+export interface SequenceCallbacks {
+  onBlockStart?: (index: number, block: ExtractedBlock) => void;
+  onComplete?: () => void;
+  onError?: () => void;
+}
+
+/**
+ * Speaks an ordered list of blocks continuously as one full document audio stream.
+ * Uses chained utterances to avoid browser Web Speech length cutoffs.
+ * Returns a cancel function.
+ */
+export function speakBlockSequence(
+  blocks: ExtractedBlock[],
+  startIndex = 0,
+  callbacks?: SequenceCallbacks,
+): () => void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    callbacks?.onError?.();
+    return () => {};
+  }
+
+  const synth = window.speechSynthesis;
+  synth.cancel();
+
+  if (blocks.length === 0 || startIndex >= blocks.length) {
+    callbacks?.onComplete?.();
+    return () => {};
+  }
+
+  let cancelled = false;
+
+  const speakAt = (idx: number) => {
+    if (cancelled) return;
+    if (idx >= blocks.length) {
+      callbacks?.onComplete?.();
+      return;
+    }
+
+    const blk = blocks[idx];
+    const text = getSpeakableText(blk).trim();
+    if (!text) {
+      speakAt(idx + 1);
+      return;
+    }
+
+    callbacks?.onBlockStart?.(idx, blk);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.96;
+    utterance.onend = () => {
+      if (!cancelled) {
+        speakAt(idx + 1);
+      }
+    };
+    utterance.onerror = () => {
+      if (!cancelled) {
+        cancelled = true;
+        callbacks?.onError?.();
+      }
+    };
+    synth.speak(utterance);
+  };
+
+  speakAt(startIndex);
+
+  return () => {
+    cancelled = true;
+    synth.cancel();
+  };
 }

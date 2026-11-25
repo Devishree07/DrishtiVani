@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { buildBrfFallbackContent } from "@/lib/api-client";
-import { getSpeakableText } from "@/lib/speech";
+import {
+  getOrderedReadableBlocks,
+  getSpeakableText,
+  speakBlockSequence,
+} from "@/lib/speech";
 import type { DocumentRecord, ExtractedBlock } from "@/types/document";
 
 interface AccessibleDocumentReaderProps {
@@ -12,21 +16,18 @@ interface AccessibleDocumentReaderProps {
 export default function AccessibleDocumentReader({
   documentRecord,
 }: AccessibleDocumentReaderProps) {
-  const orderedBlocks = [...documentRecord.blocks]
-    .filter((b) => b.verificationStatus !== "rejected")
-    .sort((a, b) =>
-      a.pageNumber !== b.pageNumber
-        ? a.pageNumber - b.pageNumber
-        : a.order - b.order,
-    );
+  const orderedBlocks = getOrderedReadableBlocks(documentRecord);
 
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [playingAll, setPlayingAll] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const blockRefs = useRef<Array<HTMLElement | null>>([]);
+  const cancelSequenceRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     return () => {
+      cancelSequenceRef.current?.();
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
@@ -48,13 +49,59 @@ export default function AccessibleDocumentReader({
     }
   }
 
+  function stopAllAudio() {
+    cancelSequenceRef.current?.();
+    cancelSequenceRef.current = null;
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setPlayingAll(false);
+    setSpeakingId(null);
+  }
+
+  function togglePlayFullDocument() {
+    if (playingAll) {
+      stopAllAudio();
+      setLiveAnnouncement("Stopped full document audio.");
+      return;
+    }
+    if (orderedBlocks.length === 0) return;
+
+    cancelSequenceRef.current?.();
+    setPlayingAll(true);
+    setLiveAnnouncement(
+      `Playing full document audio across ${orderedBlocks.length} blocks.`,
+    );
+    cancelSequenceRef.current = speakBlockSequence(orderedBlocks, 0, {
+      onBlockStart: (idx, blk) => {
+        setFocusedIndex(idx);
+        setSpeakingId(blk.id);
+        blockRefs.current[idx]?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      },
+      onComplete: () => {
+        setPlayingAll(false);
+        setSpeakingId(null);
+        cancelSequenceRef.current = null;
+        setLiveAnnouncement("Finished reading full document.");
+      },
+      onError: () => {
+        setPlayingAll(false);
+        setSpeakingId(null);
+        cancelSequenceRef.current = null;
+      },
+    });
+  }
+
   function speakBlock(block: ExtractedBlock) {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       return;
     }
-    window.speechSynthesis.cancel();
-    if (speakingId === block.id) {
-      setSpeakingId(null);
+    const wasThis = speakingId === block.id && !playingAll;
+    stopAllAudio();
+    if (wasThis) {
       return;
     }
     const utterance = new SpeechSynthesisUtterance(getSpeakableText(block));
@@ -122,10 +169,7 @@ export default function AccessibleDocumentReader({
       const current = orderedBlocks[focusedIndex];
       if (current) speakBlock(current);
     } else if (e.key === "Escape") {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
-      setSpeakingId(null);
+      stopAllAudio();
     }
   }
 
@@ -135,6 +179,39 @@ export default function AccessibleDocumentReader({
       <div className="sr-only" aria-live="polite">
         {liveAnnouncement}
       </div>
+
+      {/* Full Document Continuous Audio Player */}
+      {orderedBlocks.length > 0 && (
+        <section
+          aria-label="Full document audio player"
+          className="paper-card flex flex-wrap items-center justify-between gap-4 border-blue-200 bg-blue-50/70 px-5 py-4"
+        >
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-slate-900">
+              Full Document Audio
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-600">
+              {playingAll
+                ? `Reading block ${focusedIndex + 1} of ${orderedBlocks.length} (Page ${orderedBlocks[focusedIndex]?.pageNumber ?? 1})`
+                : `Listen to all ${orderedBlocks.length} blocks across ${documentRecord.totalPages} ${documentRecord.totalPages === 1 ? "page" : "pages"} continuously in one flow.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={togglePlayFullDocument}
+            aria-pressed={playingAll}
+            className={
+              playingAll
+                ? "inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-slate-800"
+                : "sketch-button px-5 py-2.5 text-sm"
+            }
+          >
+            <span>
+              {playingAll ? "Stop Full Audio" : "Play Full Document Audio"}
+            </span>
+          </button>
+        </section>
+      )}
 
       {/* Keyboard Navigation Guide */}
       <section
