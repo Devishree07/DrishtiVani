@@ -27,4 +27,4 @@ services:
         fromService:
           type: web
           name: drishtivani-diagram-engine
-          property: url
+          property: hostport

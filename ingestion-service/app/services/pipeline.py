@@ -230,7 +230,9 @@ class IngestionPipeline:
                                             # Local cv2/ultralytics not in this venv; call Diagram Engine microservice (port 8001)
                                             try:
                                                 import httpx
-                                                diag_base = self.settings.DIAGRAM_ENGINE_URL.rstrip("/")
+                                                diag_base = self.settings.DIAGRAM_ENGINE_URL.strip().rstrip("/")
+                                                if not diag_base.startswith(("http://", "https://")):
+                                                    diag_base = f"http://{diag_base}"
                                                 with httpx.Client(timeout=15.0) as http_client:
                                                     resp = http_client.post(
                                                         f"{diag_base}/process-diagram",
