@@ -125,6 +125,10 @@ class Settings(BaseSettings):
         default="./local_storage",
         description="Local directory for storing handouts, pages, and crops when in local mode",
     )
+    DIAGRAM_ENGINE_URL: str = Field(
+        default="http://127.0.0.1:8001",
+        description="Base URL of Member 2 Diagram Engine microservice",
+    )
 
     def get_sqlalchemy_database_url(self) -> str:
         """Return the database URL formatted for SQLAlchemy with the psycopg (v3) driver.

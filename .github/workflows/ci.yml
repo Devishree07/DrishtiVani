@@ -13,61 +13,35 @@ jobs:
   frontend-check:
     name: Frontend Lint & Build (Windows)
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./frontend
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # Cache will automatically activate once pnpm-lock.yaml is committed
-          cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || '' }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Dependencies
         shell: pwsh
         run: |
-          if (Test-Path "pnpm-lock.yaml") {
-            pnpm install --frozen-lockfile
-          } elseif (Test-Path "package.json") {
-            pnpm install
-          } else {
-            Write-Host "No package.json or pnpm-lock.yaml found yet. Skipping dependency install."
-          }
+          npm ci
 
       - name: Check TypeScript & Linting
         shell: pwsh
         run: |
-          if (Test-Path "package.json") {
-            $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
-            if ($pkg.scripts.lint) {
-              pnpm run lint
-            } else {
-              Write-Host "No lint script defined in package.json. Skipping."
-            }
-          } else {
-            Write-Host "No package.json found. Skipping linting."
-          }
+          npm run lint
 
       - name: Build Applications
         shell: pwsh
         run: |
-          if (Test-Path "package.json") {
-            $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
-            if ($pkg.scripts.build) {
-              pnpm run build
-            } else {
-              Write-Host "No build script defined in package.json. Skipping."
-            }
-          } else {
-            Write-Host "No package.json found. Skipping build."
-          }
+          npm run build
         env:
           NEXT_PUBLIC_API_URL: "http://localhost:8000"
 

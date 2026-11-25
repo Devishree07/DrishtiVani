@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: drishtivani-diagram-engine
+    runtime: docker
+    dockerfilePath: ./diagram_engine/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+
+  - type: web
+    name: drishtivani-ingestion
+    runtime: docker
+    dockerfilePath: ./ingestion-service/Dockerfile
+    dockerContext: ./ingestion-service
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SKIP_STARTUP_CHECKS
+        value: "true"
+      - key: USE_LOCAL_STORAGE
+        value: "true"
+      - key: DATABASE_URL
+        value: "sqlite:///./drishtivani_local.db"
+      - key: DIAGRAM_ENGINE_URL
+        fromService:
+          type: web
+          name: drishtivani-diagram-engine
+          property: url

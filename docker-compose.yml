@@ -1,0 +1,46 @@
+services:
+  diagram-engine:
+    build:
+      context: .
+      dockerfile: diagram_engine/Dockerfile
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  ingestion-service:
+    build:
+      context: ./ingestion-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      SKIP_STARTUP_CHECKS: "true"
+      USE_LOCAL_STORAGE: "true"
+      DATABASE_URL: "sqlite:///./data/drishtivani_local.db"
+      DIAGRAM_ENGINE_URL: "http://diagram-engine:8001"
+    volumes:
+      - ingestion_data:/app/local_storage
+      - ingestion_db:/app/data
+    depends_on:
+      - diagram-engine
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_DEMO_MODE: "false"
+        NEXT_PUBLIC_API_URL: "http://localhost:8000"
+        NEXT_PUBLIC_DIAGRAM_API_URL: "http://localhost:8001"
+        NEXT_PUBLIC_TRANSCRIPTION_API_URL: "http://localhost:8002"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ingestion-service
+    restart: unless-stopped
+
+volumes:
+  ingestion_data:
+  ingestion_db:
