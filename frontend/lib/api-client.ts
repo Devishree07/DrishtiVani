@@ -17,20 +17,26 @@ import type {
 
 const DEMO_STORAGE_KEY = "drishtivani_demo_documents_v1";
 
+const CONFIGURED_API_URL = process.env.NEXT_PUBLIC_API_URL?.trim() ?? "";
+
 export const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+  CONFIGURED_API_URL || "http://localhost:8000"
 ).replace(/\/+$/, "");
 
 export const DIAGRAM_API_URL = (
-  process.env.NEXT_PUBLIC_DIAGRAM_API_URL ?? "http://localhost:8001"
+  process.env.NEXT_PUBLIC_DIAGRAM_API_URL?.trim() || "http://localhost:8001"
 ).replace(/\/+$/, "");
 
 export const TRANSCRIPTION_API_URL = (
-  process.env.NEXT_PUBLIC_TRANSCRIPTION_API_URL ?? "http://localhost:8002"
+  process.env.NEXT_PUBLIC_TRANSCRIPTION_API_URL?.trim() ||
+  "http://localhost:8002"
 ).replace(/\/+$/, "");
 
 export function isDemoMode(): boolean {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "false" && API_BASE_URL) {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    return true;
+  }
+  if (CONFIGURED_API_URL) {
     return false;
   }
   return true;
@@ -339,9 +345,9 @@ export async function fetchDocumentById(
     return docs.find((d) => d.id === docId) ?? null;
   }
 
-  const [layoutRes, statusData] = await Promise.all([
+  const [layoutRes, docsList] = await Promise.all([
     fetch(`${API_BASE_URL}/documents/${docId}/layout`, { cache: "no-store" }),
-    fetchDocumentStatus(docId).catch(() => null),
+    fetchDocuments().catch(() => [] as DocumentRecord[]),
   ]);
 
   if (layoutRes.status === 404) return null;
@@ -350,6 +356,7 @@ export async function fetchDocumentById(
   }
 
   const layout = (await layoutRes.json()) as BackendDocumentLayout;
+  const listSummary = docsList.find((d) => d.id === docId);
 
   const pages: PageMetadata[] = layout.pages.map((p) => ({
     pageNumber: p.page_number,
@@ -366,15 +373,15 @@ export async function fetchDocumentById(
 
   return {
     id: layout.document_id,
-    filename: `${layout.title}.pdf`,
+    filename: listSummary?.filename ?? `${layout.title}.pdf`,
     title: layout.title,
     subject: "Ingested Document",
-    uploadedAt: new Date().toISOString(),
-    processingStatus: statusData?.status ?? "parsed",
+    uploadedAt: listSummary?.uploadedAt ?? new Date().toISOString(),
+    processingStatus: listSummary?.processingStatus ?? "parsed",
     totalPages: pages.length,
     totalBlocks: blocks.length,
     flaggedBlocks: blocks.filter((b) => b.needsReview).length,
-    errorMessage: statusData?.error_message ?? null,
+    errorMessage: null,
     lowConfidenceThreshold: CONFIDENCE_REVIEW_THRESHOLD,
     pages,
     blocks,

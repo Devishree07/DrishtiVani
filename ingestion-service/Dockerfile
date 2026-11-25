@@ -18,10 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (use CPU PyTorch index to avoid 2.5GB CUDA wheels in cloud builds)
+# Install CPU-only PyTorch first (--index-url prevents downloading 2.5GB CUDA wheels from PyPI)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code and migrations
 COPY . /app

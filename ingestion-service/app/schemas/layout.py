@@ -103,7 +103,7 @@ class DocumentStatusResponse(BaseModel):
     """Response for GET /documents/{id}."""
     document_id: UUID
     title: str
-    status: Literal["uploaded", "processing", "parsed", "failed"]
+    status: Literal["uploaded", "processing", "parsed", "published", "failed"]
     page_count: int
     error_message: Optional[str] = None
 

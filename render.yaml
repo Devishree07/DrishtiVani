@@ -24,7 +24,18 @@ services:
       - key: DATABASE_URL
         value: "sqlite:///./drishtivani_local.db"
       - key: DIAGRAM_ENGINE_URL
-        fromService:
-          type: web
-          name: drishtivani-diagram-engine
-          property: hostport
+        value: "https://drishtivani-diagram-engine.onrender.com"
+
+  - type: web
+    name: drishtivani-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: "false"
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://drishtivani-ingestion.onrender.com"
+      - key: NEXT_PUBLIC_DIAGRAM_API_URL
+        value: "https://drishtivani-diagram-engine.onrender.com"

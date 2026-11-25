@@ -95,7 +95,11 @@ export default function StudentDashboard() {
         if (!active) return;
         const visible = isDemoMode()
           ? docs
-          : docs.filter((d) => d.processingStatus === "published");
+          : docs.filter(
+              (d) =>
+                d.processingStatus === "published" &&
+                (d.totalBlocks ?? d.blocks.length) > 0,
+            );
         setDocuments(visible);
       })
       .catch((err) => {
